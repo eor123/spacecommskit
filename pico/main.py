@@ -1,4 +1,4 @@
-# main.py — OpenLST Pico Pipeline
+# main.py — OpenLST Pico Pipeline + GPS
 # MicroPython v1.27 on Raspberry Pi Pico (RP2040)
 #
 # Payload byte 0 = sub-opcode:
@@ -9,6 +9,11 @@
 #   0x04 = GET_INFO    → INFO:<filename>:<bytes>:<chunks>  or INFO:ERR:<reason>
 #   0x05 = GET_CHUNK   → CHUNK:<index>:<200 bytes data>    or CHUNK:ERR:<reason>
 #   0x06 = DELETE      → DEL:OK:<filename>                 or DEL:ERR:<reason>
+#   0x07 = GET_GPS     → GPS:<lat>,<lon>,<alt>,<sats>,<fix>  or GPS:ERR:<reason>
+#
+# GPS also transmits autonomously every GPS_BEACON_INTERVAL_MS (10 seconds)
+# so the ground station gets a live track without issuing commands.
+# GPS log is also written to /sd/gps_log.txt for post-flight analysis.
 
 from machine import UART, ADC, Pin, SPI, I2C
 import time
@@ -28,11 +33,18 @@ CMD_LIST      = 0x03
 CMD_GET_INFO  = 0x04
 CMD_GET_CHUNK = 0x05
 CMD_DELETE    = 0x06
+CMD_GET_GPS   = 0x07
 
 CHUNK_SIZE    = 200  # bytes of image data per chunk — fits in ESP_MAX_PAYLOAD
 
+# ── GPS beacon interval ────────────────────────────────────────────────────
+GPS_BEACON_INTERVAL_MS = 10000  # send autonomous GPS packet every 10 seconds
+
 # ── UART0 — connects to OpenLST board 0004 UART0 ──────────────────────────
 uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
+
+# ── UART1 — GPS6MV2 (NEO-6M) module ───────────────────────────────────────
+gps_uart = UART(1, baudrate=9600, tx=Pin(8), rx=Pin(9))
 
 # ── Status LED ─────────────────────────────────────────────────────────────
 led = Pin(25, Pin.OUT)
@@ -96,6 +108,182 @@ def mount_sd():
     except Exception as e:
         print(f"SD mount failed: {e}")
         return False
+
+# ── GPS — NEO-6M / GPS6MV2 ────────────────────────────────────────────────
+# Holds the most recent valid GPS fix. Updated continuously by poll_gps().
+gps_fix = {
+    'lat':  0.0,
+    'lon':  0.0,
+    'alt':  0.0,   # metres above MSL (from GPGGA)
+    'sats': 0,     # satellites in use
+    'fix':  False, # True = valid fix
+    'time': '',    # UTC time string from NMEA e.g. "123519"
+    'date': '',    # UTC date string from NMEA e.g. "230394"
+}
+
+# UBX command to set NEO-6M into Airborne (<1g) dynamic model.
+# Without this the module stops reporting above ~18km (CoCom limit).
+# CFG-NAV5: dynModel=6 (Airborne <1g), fixMode=3 (Auto 2D/3D)
+_UBX_AIRBORNE = bytes([
+    0xB5, 0x62,             # UBX sync chars
+    0x06, 0x24,             # Class CFG, ID NAV5
+    0x24, 0x00,             # payload length 36
+    0xFF, 0xFF,             # mask — apply all settings
+    0x06,                   # dynModel = 6 (Airborne <1g)
+    0x03,                   # fixMode = 3 (Auto 2D/3D)
+    0x00, 0x00, 0x00, 0x00, # fixedAlt
+    0x10, 0x27, 0x00, 0x00, # fixedAltVar
+    0x05,                   # minElev
+    0x00,                   # drLimit
+    0xFA, 0x00,             # pDop
+    0xFA, 0x00,             # tDop
+    0x64, 0x00,             # pAcc
+    0x2C, 0x01,             # tAcc
+    0x00,                   # staticHoldThresh
+    0x3C,                   # dgpsTimeOut
+    0x00, 0x00, 0x00, 0x00, # reserved
+    0x00, 0x00, 0x00, 0x00, # reserved
+    0x00, 0x00,             # reserved
+    0x16, 0xDC,             # checksum A, B
+])
+
+def init_gps():
+    """Send airborne mode config to NEO-6M and flush startup NMEA."""
+    print("GPS: sending airborne mode UBX config...")
+    gps_uart.write(_UBX_AIRBORNE)
+    time.sleep_ms(500)
+    # Flush any buffered NMEA sentences from startup
+    while gps_uart.any():
+        gps_uart.read(gps_uart.any())
+    print("GPS: ready")
+
+def _nmea_checksum_ok(sentence):
+    """Validate NMEA checksum. sentence includes leading $ and *XX."""
+    try:
+        star = sentence.rindex('*')
+        body = sentence[1:star]
+        expected = int(sentence[star+1:star+3], 16)
+        calc = 0
+        for c in body:
+            calc ^= ord(c)
+        return calc == expected
+    except Exception:
+        return False
+
+def _parse_lat(val, hemi):
+    """Convert NMEA ddmm.mmmm + N/S to signed decimal degrees."""
+    if not val:
+        return 0.0
+    deg = float(val[:2])
+    mins = float(val[2:])
+    result = deg + mins / 60.0
+    if hemi == 'S':
+        result = -result
+    return round(result, 6)
+
+def _parse_lon(val, hemi):
+    """Convert NMEA dddmm.mmmm + E/W to signed decimal degrees."""
+    if not val:
+        return 0.0
+    deg = float(val[:3])
+    mins = float(val[3:])
+    result = deg + mins / 60.0
+    if hemi == 'W':
+        result = -result
+    return round(result, 6)
+
+def _parse_gprmc(fields):
+    """
+    Parse $GPRMC sentence — provides lat, lon, date, time, fix status.
+    $GPRMC,time,status,lat,N/S,lon,E/W,speed,course,date,magvar,E/W*cs
+    """
+    global gps_fix
+    try:
+        if len(fields) < 10:
+            return
+        status = fields[2]   # A = active (valid), V = void
+        if status != 'A':
+            gps_fix['fix'] = False
+            return
+        gps_fix['lat']  = _parse_lat(fields[3], fields[4])
+        gps_fix['lon']  = _parse_lon(fields[5], fields[6])
+        gps_fix['time'] = fields[1]
+        gps_fix['date'] = fields[9]
+        gps_fix['fix']  = True
+    except Exception as e:
+        print(f"GPRMC parse error: {e}")
+
+def _parse_gpgga(fields):
+    """
+    Parse $GPGGA sentence — provides altitude and satellite count.
+    $GPGGA,time,lat,N/S,lon,E/W,fix,sats,hdop,alt,M,...*cs
+    """
+    global gps_fix
+    try:
+        if len(fields) < 10:
+            return
+        fix_quality = int(fields[6]) if fields[6] else 0
+        if fix_quality == 0:
+            return
+        gps_fix['sats'] = int(fields[7]) if fields[7] else 0
+        gps_fix['alt']  = float(fields[9]) if fields[9] else 0.0
+    except Exception as e:
+        print(f"GPGGA parse error: {e}")
+
+# Line buffer for GPS UART — accumulates bytes into complete NMEA sentences
+_gps_buf = bytearray()
+
+def poll_gps():
+    """
+    Call this frequently from the main loop.
+    Reads all available bytes from GPS UART, assembles complete NMEA sentences,
+    parses GPRMC and GPGGA. Non-blocking — returns immediately if no data.
+    """
+    global _gps_buf
+    while gps_uart.any():
+        b = gps_uart.read(1)
+        if b is None:
+            break
+        ch = b[0]
+        if ch == ord('\n'):
+            # Complete sentence received
+            line = _gps_buf.decode('ascii', 'ignore').strip()
+            _gps_buf = bytearray()
+            if line.startswith('$') and '*' in line:
+                if _nmea_checksum_ok(line):
+                    fields = line.split(',')
+                    tag = fields[0][1:]  # strip leading $
+                    if tag in ('GPRMC', 'GNRMC'):
+                        _parse_gprmc(fields)
+                    elif tag in ('GPGGA', 'GNGGA'):
+                        _parse_gpgga(fields)
+        elif ch != ord('\r'):
+            if len(_gps_buf) < 120:  # guard against runaway buffer
+                _gps_buf.append(ch)
+
+def gps_packet():
+    """Build the GPS response string from the current fix."""
+    if gps_fix['fix']:
+        return (f"GPS:{gps_fix['lat']:.6f},"
+                f"{gps_fix['lon']:.6f},"
+                f"{gps_fix['alt']:.1f},"
+                f"{gps_fix['sats']},"
+                f"1").encode()
+    else:
+        return b"GPS:0.000000,0.000000,0.0,0,0"
+
+def log_gps_to_sd():
+    """Append current GPS fix to /sd/gps_log.txt if SD is mounted and fix is valid."""
+    if not sd_mounted or not gps_fix['fix']:
+        return
+    try:
+        line = (f"{gps_fix['date']},{gps_fix['time']},"
+                f"{gps_fix['lat']:.6f},{gps_fix['lon']:.6f},"
+                f"{gps_fix['alt']:.1f},{gps_fix['sats']}\n")
+        with open('/sd/gps_log.txt', 'a') as f:
+            f.write(line)
+    except Exception as e:
+        print(f"GPS log write error: {e}")
 
 # ── Arducam SPI helpers ────────────────────────────────────────────────────
 def cam_write(addr, data):
@@ -230,6 +418,8 @@ def recv_esp(timeout_ms=5000):
     remaining = 0
     deadline  = time.ticks_add(time.ticks_ms(), timeout_ms)
     while time.ticks_diff(deadline, time.ticks_ms()) > 0:
+        # ── Service GPS while waiting for a command ────────────────────────
+        poll_gps()
         if uart.any():
             b = uart.read(1)[0]
             if state == STATE_START0:
@@ -258,14 +448,26 @@ def recv_esp(timeout_ms=5000):
 blink(3)
 print("OpenLST Pico ready — ESP framing on UART0 @ 115200")
 mount_sd()
+init_gps()
 # Camera initialised on first idle timeout so UART listener
 # is not blocked during the slow I2C register sequence at boot
 
 # ── Main loop ──────────────────────────────────────────────────────────────
-_cam_init_done = False
+_cam_init_done    = False
+_last_gps_beacon  = time.ticks_ms()
 
 while True:
     payload = recv_esp(timeout_ms=5000)
+
+    # ── Autonomous GPS beacon — send every GPS_BEACON_INTERVAL_MS ─────────
+    now = time.ticks_ms()
+    if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
+        pkt = gps_packet()
+        send_esp(pkt)
+        log_gps_to_sd()
+        print(f"GPS beacon → {pkt.decode()}")
+        blink(1)
+        _last_gps_beacon = now
 
     # Use first idle timeout to init camera in background
     if payload is None:
@@ -331,8 +533,6 @@ while True:
             print(f"LIST error: {e}")
 
     # ── 0x04 GET_INFO ──────────────────────────────────────────────────────
-    # Payload: sub-opcode(1) + filename bytes
-    # Response: INFO:<filename>:<total_bytes>:<total_chunks>
     elif sub_opcode == CMD_GET_INFO:
         try:
             if not sd_mounted and not mount_sd():
@@ -350,8 +550,6 @@ while True:
             print(f"GET_INFO error: {e}")
 
     # ── 0x05 GET_CHUNK ─────────────────────────────────────────────────────
-    # Payload: sub-opcode(1) + chunk_index(2 bytes LE) + filename bytes
-    # Response: CHUNK:<index>: followed by raw binary data bytes
     elif sub_opcode == CMD_GET_CHUNK:
         try:
             if not sd_mounted and not mount_sd():
@@ -364,7 +562,6 @@ while True:
                 with open(path, 'rb') as f:
                     f.seek(offset)
                     data = f.read(CHUNK_SIZE)
-                # Response: header string + raw binary data
                 header = f"CHUNK:{chunk_index}:".encode()
                 send_esp(header + data)
                 print(f"GET_CHUNK {chunk_index} → {len(data)} bytes")
@@ -373,8 +570,6 @@ while True:
             print(f"GET_CHUNK error: {e}")
 
     # ── 0x06 DELETE ────────────────────────────────────────────────────────
-    # Payload: sub-opcode(1) + filename bytes
-    # Response: DEL:OK:<filename> or DEL:ERR:<reason>
     elif sub_opcode == CMD_DELETE:
         try:
             if not sd_mounted and not mount_sd():
@@ -391,8 +586,21 @@ while True:
             send_esp(b"DEL:ERR:FAIL")
             print(f"DELETE error: {e}")
 
+    # ── 0x07 GET_GPS ───────────────────────────────────────────────────────
+    # Payload: sub-opcode(1) only
+    # Response: GPS:<lat>,<lon>,<alt>,<sats>,<fix>
+    #   lat/lon = decimal degrees (negative = S/W)
+    #   alt     = metres above MSL
+    #   sats    = satellites in use
+    #   fix     = 1 (valid) or 0 (no fix)
+    elif sub_opcode == CMD_GET_GPS:
+        pkt = gps_packet()
+        send_esp(pkt)
+        log_gps_to_sd()
+        blink(1)
+        print(f"GET_GPS → {pkt.decode()}")
+
     else:
         err = f"ERR:UNKNOWN:{sub_opcode:#04x}"
         send_esp(err.encode())
         print(f"Unknown sub-opcode: {sub_opcode:#04x}")
-
