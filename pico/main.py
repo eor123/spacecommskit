@@ -514,25 +514,34 @@ while True:
         read_baro()
         _last_baro_read = now
 
-    # ── Fused GPS+baro beacon every 10 seconds ────────────────────────────
-    if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
-        pkt = gps_packet()
-        send_esp(pkt)
-        log_gps_to_sd()
-        print(f"Beacon → {pkt.decode()}")
-        blink(1)
-        _last_gps_beacon = now
-
     # ── Camera init on first idle ──────────────────────────────────────────
     if payload is None:
         if not _cam_init_done:
-            init_camera()   # GP10 GREEN on if OK
+            init_camera()
             _cam_init_done = True
+        # ── Fused GPS+baro beacon — only fire when no command pending ──────
+        if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
+            pkt = gps_packet()
+            send_esp(pkt)
+            log_gps_to_sd()
+            print(f"Beacon → {pkt.decode()}")
+            blink(1)
+            _last_gps_beacon = now
         continue
 
     if len(payload) == 0:
+        # No command — safe to fire beacon
+        if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
+            pkt = gps_packet()
+            send_esp(pkt)
+            log_gps_to_sd()
+            print(f"Beacon → {pkt.decode()}")
+            blink(1)
+            _last_gps_beacon = now
         continue
 
+    # ── Command received — process it BEFORE any beacon ───────────────────
+    # This prevents a queued beacon from jumping the response queue
     sub_opcode = payload[0]
 
     # ── 0x00 PING ──────────────────────────────────────────────────────────
@@ -644,4 +653,3 @@ while True:
         err = f"ERR:UNKNOWN:{sub_opcode:#04x}"
         send_esp(err.encode())
         print(f"Unknown sub-opcode: {sub_opcode:#04x}")
-
