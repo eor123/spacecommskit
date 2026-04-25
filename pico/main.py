@@ -11,6 +11,7 @@
 #   0x06 = DELETE      → DEL:OK:<filename>
 #   0x07 = GET_GPS     → GPS:<lat>,<lon>,<gps_alt>,<sats>,<fix>,<hpa>,<baro_alt>,<temp_c>
 #   0x08 = GET_BARO    → BARO:<hpa>,<baro_alt>,<temp_c>
+#   0x09 = BEACON_CTRL → BEACON:ON or BEACON:OFF  (payload[1] = 0x01 ON, 0x00 OFF)
 #
 # GPS beacon transmits autonomously every GPS_BEACON_INTERVAL_MS (10 seconds)
 # Fused beacon includes both GPS and barometric data in one packet.
@@ -44,11 +45,13 @@ CMD_GET_CHUNK = 0x05
 CMD_DELETE    = 0x06
 CMD_GET_GPS   = 0x07
 CMD_GET_BARO  = 0x08
+CMD_BEACON_CTRL = 0x09  # payload[1]: 0x01=ON, 0x00=OFF
 
 CHUNK_SIZE    = 200
 
 # ── Beacon interval ────────────────────────────────────────────────────────
 GPS_BEACON_INTERVAL_MS = 10000  # 10 seconds
+_beacon_enabled = True          # controlled by CMD_BEACON_CTRL (0x09)
 
 # ── UART0 — OpenLST board UART0 ───────────────────────────────────────────
 uart = UART(0, baudrate=115200, tx=Pin(0), rx=Pin(1))
@@ -520,7 +523,7 @@ while True:
             init_camera()
             _cam_init_done = True
         # ── Fused GPS+baro beacon — only fire when no command pending ──────
-        if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
+        if _beacon_enabled and time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
             pkt = gps_packet()
             send_esp(pkt)
             log_gps_to_sd()
@@ -531,7 +534,7 @@ while True:
 
     if len(payload) == 0:
         # No command — safe to fire beacon
-        if time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
+        if _beacon_enabled and time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
             pkt = gps_packet()
             send_esp(pkt)
             log_gps_to_sd()
@@ -648,6 +651,18 @@ while True:
         pkt = baro_packet()
         send_esp(pkt); blink(1)
         print(f"GET_BARO → {pkt.decode()}")
+
+    # ── 0x09 CMD_BEACON_CTRL ───────────────────────────────────────────────
+    # payload[1] = 0x01 → beacon ON
+    # payload[1] = 0x00 → beacon OFF
+    # Response: BEACON:ON or BEACON:OFF
+    elif sub_opcode == CMD_BEACON_CTRL:
+        if len(payload) >= 2:
+            _beacon_enabled = (payload[1] == 0x01)
+        state = "ON" if _beacon_enabled else "OFF"
+        resp = f"BEACON:{state}"
+        send_esp(resp.encode()); blink(1)
+        print(f"BEACON_CTRL → {resp}")
 
     else:
         err = f"ERR:UNKNOWN:{sub_opcode:#04x}"
