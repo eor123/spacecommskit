@@ -1,0 +1,51 @@
+[
+  {
+    "Name": "PICO Ping",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "00",
+    "Notes": "Ping the Pico \u2014 expects PICO:ACK"
+  },
+  {
+    "Name": "PICO Read Temp",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "01",
+    "Notes": "Read onboard temperature sensor"
+  },
+  {
+    "Name": "PICO Snap",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "02",
+    "Notes": "Trigger camera snapshot"
+  },
+  {
+    "Name": "PICO List Files",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "03",
+    "Notes": "List files on SD card"
+  },
+  {
+    "Name": "PICO Get File",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "04",
+    "Notes": "Download file from SD card"
+  },
+  {
+    "Name": "PICO Delete File",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "05",
+    "Notes": "Delete file from SD card"
+  },
+  {
+    "Name": "Get GPS",
+    "Opcode": 32,
+    "Type": "RawHex",
+    "Payload": "07",
+    "Notes": "Get GPS location"
+  }
+]

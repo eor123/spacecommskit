@@ -6,20 +6,20 @@
 ;   1. Install Inno Setup 6 from https://jrsoftware.org/isinfo.php
 ;   2. Build the C# app in Release mode:
 ;      dotnet publish -c Release -r win-x64 --self-contained true
-;      Output lands in: bin\Release\net8.0-windows\win-x64\publish\
+;      Output lands in: bin\Release\net8.0-windows\publish\win-x64\
 ;   3. Open this .iss file in Inno Setup Compiler
 ;   4. Press F9 (Build) — installer .exe appears in Output\ folder
 ; ============================================================
 
 #define AppName      "OpenLST Ground Station"
-#define AppVersion   "1.1.0"
+#define AppVersion   "1.2.0"
 #define AppPublisher "SpaceCommsKit"
 #define AppURL       "https://www.spacecommskit.com"
 #define AppExeName   "OpenLstGroundStation.exe"
 #define AppCopyright "Copyright (C) 2025 SpaceCommsKit"
 
 ; ── Path to your published build output ──────────────────────
-#define SourceDir    "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\win-x64\publish"
+#define SourceDir    "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\publish\win-x64"
 
 [Setup]
 ; ── Application identity ─────────────────────────────────────
@@ -93,6 +93,11 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; \
 ; Source: "docs\OpenLST_Explorer_Kit_Developer_Guide.pdf"; \
 ;     DestDir: "{app}\docs"; Flags: ignoreversion
 
+; RTL-SDR Tools (GPLv2 — bundled for RF QA tab)
+Source: "rtlsdr\*"; \
+  DestDir: "{app}\rtlsdr"; \
+  Flags: ignoreversion recursesubdirs
+  
 [Icons]
 ; Start menu
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \

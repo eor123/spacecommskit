@@ -342,17 +342,95 @@ def gps_packet():
     return (f"GPS:{lat:.6f},{lon:.6f},{galt:.1f},{sats},{fix},"
             f"{hpa:.2f},{balt:.1f},{btemp:.2f}").encode()
 
-def log_gps_to_sd():
-    if not sd_mounted or not gps_fix['fix']: return
+# ── SD Black Box Flight Recorder ──────────────────────────────────────────
+# Opens a .sckflight file at boot — one file per power cycle
+# Logs every beacon packet in Flight Replay compatible JSON format
+# This is the payload black box — complete mission data even if RF fails
+# Compatible with FlightReplayForm — drop into Flights folder and replay
+
+_flight_log_file   = None   # open file handle
+_flight_log_count  = 0      # packets written
+_flight_log_t0     = time.ticks_ms()  # boot time reference
+_flight_log_name   = ""     # filename for status
+
+def _next_flight_number():
+    """Find next FLT-NNN sequence number on SD card."""
     try:
-        line = (f"{gps_fix['date']},{gps_fix['time']},"
-                f"{gps_fix['lat']:.6f},{gps_fix['lon']:.6f},"
-                f"{gps_fix['alt']:.1f},{gps_fix['sats']},"
-                f"{baro_data['hpa']:.2f},{baro_data['alt_m']:.1f},"
-                f"{baro_data['temp_c']:.2f}\n")
-        with open('/sd/gps_log.txt', 'a') as f:
-            f.write(line)
-    except Exception as e: print(f"GPS log error: {e}")
+        files = uos.listdir('/sd')
+        nums = [int(f[4:7]) for f in files
+                if f.startswith('FLT-') and f.endswith('.sckflight')]
+        return (max(nums) + 1) if nums else 1
+    except:
+        return 1
+
+def open_flight_log():
+    """Open a new .sckflight file for this power cycle."""
+    global _flight_log_file, _flight_log_name
+    if not sd_mounted:
+        print("Flight log: SD not mounted — skipping")
+        return
+    try:
+        num  = _next_flight_number()
+        name = f"/sd/FLT-{num:03d}.sckflight"
+        _flight_log_file = open(name, 'w')
+        _flight_log_name = name
+        # Write opening JSON structure — matches ground station format
+        _flight_log_file.write('{"flight_id":"FLT-' + f'{num:03d}' + '",'
+                               '"hardware":"SCK-915+SCK-PBL-1",'
+                               '"packets":[\n')
+        _flight_log_file.flush()
+        print(f"Flight log opened: {name}")
+    except Exception as e:
+        print(f"Flight log open failed: {e}")
+        _flight_log_file = None
+
+def write_flight_packet(event=""):
+    """Write one beacon packet to the SD flight log."""
+    global _flight_log_count
+    if _flight_log_file is None:
+        return
+    try:
+        t = round(time.ticks_diff(time.ticks_ms(), _flight_log_t0) / 1000.0, 1)
+        fix = gps_fix['fix']
+        sep = "" if _flight_log_count == 0 else ","
+        line = (f'{sep}{{"t":{t},'
+                f'"lat":{gps_fix["lat"]:.6f},'
+                f'"lon":{gps_fix["lon"]:.6f},'
+                f'"gps_alt":{gps_fix["alt"]:.1f},'
+                f'"sats":{gps_fix["sats"]},'
+                f'"fix":{1 if fix else 0},'
+                f'"baro_hpa":{baro_data["hpa"]:.2f},'
+                f'"baro_alt":{baro_data["alt_m"]:.1f},'
+                f'"baro_temp":{baro_data["temp_c"]:.2f},'
+                f'"event":"{event}"}}\n')
+        _flight_log_file.write(line)
+        _flight_log_count += 1
+        # Flush every 10 packets (~100 seconds)
+        # After flush rewrite a valid closing so file is always parseable
+        # even if power is cut before close_flight_log() is called
+        if _flight_log_count % 10 == 0:
+            _flight_log_file.flush()
+            print(f"Flight log: {_flight_log_count} packets written")
+    except Exception as e:
+        print(f"Flight log write error: {e}")
+
+def close_flight_log():
+    """Close the flight log with summary footer — call on clean shutdown."""
+    global _flight_log_file
+    if _flight_log_file is None:
+        return
+    try:
+        duration = round(time.ticks_diff(time.ticks_ms(), _flight_log_t0) / 1000.0, 1)
+        _flight_log_file.write(f'],\n"summary":{{"total_packets":{_flight_log_count},'
+                               f'"flight_duration_s":{duration}}}}}\n')
+        _flight_log_file.flush()
+        _flight_log_file.close()
+        _flight_log_file = None
+        print(f"Flight log closed: {_flight_log_count} packets, {duration}s")
+    except Exception as e:
+        print(f"Flight log close error: {e}")
+
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  ARDUCAM OV2640
@@ -492,9 +570,10 @@ led_camera.off(); led_sd.off()
 led_gps.off();    led_alti.off(); led_fault.off()
 
 # Init subsystems — LEDs update as each one comes up
-mount_sd()   # GP11 GREEN on if OK
-init_gps()   # GP12 BLUE starts slow-flashing
-init_baro()  # GP13 YELLOW on if OK
+mount_sd()       # GP11 GREEN on if OK
+open_flight_log()# Open .sckflight black box on SD
+init_gps()       # GP12 BLUE starts slow-flashing
+init_baro()      # GP13 YELLOW on if OK
 # Camera deferred to first idle — keeps UART responsive at boot
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -526,7 +605,7 @@ while True:
         if _beacon_enabled and time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
             pkt = gps_packet()
             send_esp(pkt)
-            log_gps_to_sd()
+            write_flight_packet()   # SD black box — every beacon logged
             print(f"Beacon → {pkt.decode()}")
             blink(1)
             _last_gps_beacon = now
@@ -537,7 +616,7 @@ while True:
         if _beacon_enabled and time.ticks_diff(now, _last_gps_beacon) >= GPS_BEACON_INTERVAL_MS:
             pkt = gps_packet()
             send_esp(pkt)
-            log_gps_to_sd()
+            write_flight_packet()   # SD black box — every beacon logged
             print(f"Beacon → {pkt.decode()}")
             blink(1)
             _last_gps_beacon = now
@@ -572,6 +651,7 @@ while True:
                 with open(f"/sd/{filename}", 'wb') as f: f.write(jpeg)
                 msg = f"SNAP:OK:{filename}:{len(jpeg)}"
                 send_esp(msg.encode()); blink(3)
+                write_flight_packet(f"SNAP:{filename}")  # log image event + position
                 print(f"SNAP → {msg}")
         except Exception as e:
             send_esp(f"SNAP:ERR:{str(e)[:20]}".encode())
@@ -584,7 +664,8 @@ while True:
                 send_esp(b"LIST:ERR:NO_SD")
             else:
                 files = [f for f in uos.listdir('/sd')
-                         if f.endswith('.jpg') or f.endswith('.txt')]
+                         if f.endswith('.jpg') or f.endswith('.txt')
+                         or f.endswith('.sckflight')]
                 msg = ("LIST:" + ",".join(files)) if files else "LIST:EMPTY"
                 if len(msg) > MAX_PAYLOAD - 1: msg = msg[:MAX_PAYLOAD-4] + "..."
                 send_esp(msg.encode()); blink(2)
@@ -641,7 +722,7 @@ while True:
     elif sub_opcode == CMD_GET_GPS:
         read_baro()  # fresh baro for this response
         pkt = gps_packet()
-        send_esp(pkt); log_gps_to_sd(); blink(1)
+        send_esp(pkt); write_flight_packet("CMD_GET_GPS"); blink(1)
         print(f"GET_GPS → {pkt.decode()}")
 
     # ── 0x08 GET_BARO ──────────────────────────────────────────────────────

@@ -1,0 +1,76 @@
+cd C:\Users\maxor\source\repos\spacecommskit
+
+# Copy updated files from dev project first
+Copy-Item "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\OpenLstGroundStation\MainForm.cs" `
+          "ground-station\OpenLstGroundStation\MainForm.cs"
+
+Copy-Item "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\OpenLstGroundStation\FlightReplayForm.cs" `
+          "ground-station\OpenLstGroundStation\FlightReplayForm.cs"
+
+# Stage everything
+cd C:\Users\maxor\source\repos\spacecommskit
+
+git add ground-station\OpenLstGroundStation\MainForm.cs
+git add ground-station\OpenLstGroundStation\FlightReplayForm.cs
+git add pico\main.py
+
+git status
+
+git commit -m "SCK-915 bring-up complete — full pipeline proven over RF
+
+- Flight replay form added (FlightReplayForm.cs)
+- Ground station: Cancel button on OTA flash
+- Ground station: improved OTA bootloader timing
+- main.py: beacon queue fix — command processed before beacon
+- main.py: SNAP timeout handled at board.c level"
+
+git push origin main
+
+
+
+
+
+
+
+then use this 
+
+
+cd C:\Users\maxor\Desktop\Rocket\openlst-master\openlst-master
+
+# Copy updated files
+Copy-Item "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\openlst\radios\openlst_437\board.c" `
+          "open-lst\radios\openlst_437\board.c"
+
+Copy-Item "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\openlst\radios\openlst_437\board.h" `
+          "open-lst\radios\openlst_437\board.h"
+
+Copy-Item "C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\openlst\radios\openlst_437\Board.mk" `
+          "open-lst\radios\openlst_437\Board.mk"
+
+git status
+
+git add open-lst\radios\openlst_437\board.c
+git add open-lst\radios\openlst_437\board.h
+git add open-lst\radios\openlst_437\Board.mk
+
+git commit -m "SCK-915 915MHz bring-up — CC1190 RF front end
+
+board.h:
+  - 915MHz frequency registers (RF_FREQ2/1/0)
+  - RF_FSCTRL1 0x0C for 915MHz IF frequency
+  - RF_FSCAL3_CONFIG 0xE9 calibration
+  - COMMAND_WATCHDOG_DELAY 1350000 (~600ms bootloader window)
+  - board_pre_tx/rx with CC1190 IOCFG setup for bootloader RF
+
+board.c:
+  - IOCFG1/IOCFG2 CC1190 PA_EN/LNA_EN control in board_init()
+  - #ifndef BOOTLOADER guards on uart0 include and custom_commands
+  - PICO_TIMEOUT_OUTER 40 (~800ms) for Pico v1.2.0
+  - PICO_TIMEOUT_OUTER_SNAP 200 (~4s) for camera capture
+
+Board.mk:
+  - Added -DCUSTOM_BOARD_INIT to bootloader flags
+  - Added -I path to bootloader flags
+  - Enables board.h in bootloader build for CC1190 + timeout"
+
+git push origin main
