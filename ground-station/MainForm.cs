@@ -3712,7 +3712,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 }, txCts.Token);
 
                 bool ok = await RunRtlPower(
-                    $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx} -P -i 3s -e 9s {tmpFund}");
+                    $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx} -P -i 3s -e 9s \"{tmpFund}\"");
 
                 txCts.Cancel();
 
@@ -3761,7 +3761,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
 
                         string tmpHarm = Path.Combine(Path.GetTempPath(), $"qa_harm_{Guid.NewGuid():N}.csv");
                         ok = await RunRtlPower(
-                            $"-f {harmStart:F0}M:{harmEnd:F0}M:100k -g 496 -P -i 3s -e 9s {tmpHarm}");
+                            $"-f {harmStart:F0}M:{harmEnd:F0}M:100k -g 496 -P -i 3s -e 9s \"{tmpHarm}\"");
 
                         bool harmHasData = File.Exists(tmpHarm) && new FileInfo(tmpHarm).Length > 50;
                         if (harmHasData)
@@ -3934,12 +3934,17 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 {
                     FileName               = _rtlPowerPath,
                     Arguments              = args,
-                    WorkingDirectory       = Path.GetDirectoryName(_rtlPowerPath) ?? "",
+                    WorkingDirectory       = AppDomain.CurrentDomain.BaseDirectory,
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
                     CreateNoWindow         = true,
                 };
+                // Add rtlsdr folder to PATH so rtlsdr.dll and pthreadVC2.dll are found
+                string rtlDir = Path.GetDirectoryName(_rtlPowerPath) ?? "";
+                string existingPath = psi.EnvironmentVariables["PATH"] ?? "";
+                if (!existingPath.Contains(rtlDir))
+                    psi.EnvironmentVariables["PATH"] = rtlDir + ";" + existingPath;
                 using var proc = new Process { StartInfo = psi };
                 proc.OutputDataReceived += (s, e) =>
                 {
