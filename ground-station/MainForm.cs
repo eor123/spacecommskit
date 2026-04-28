@@ -512,7 +512,7 @@ namespace OpenLstGroundStation
                 _rtlPowerPath = rtp;
 
             SetStatus("Disconnected", Theme.Red);
-            Log("OpenLST Ground Station ready.", Theme.Cyan);
+            Log("SCK Ground Station ready.", Theme.Cyan);
             Log($"Log folder: {AppLogger.LogFolder}", Theme.Gray);
 
             // Ensure Flights folder exists
@@ -530,7 +530,7 @@ namespace OpenLstGroundStation
         // ══════════════════════════════════════════════════════════════════
         private void BuildForm()
         {
-            Text           = "OpenLST Ground Station";
+            Text           = "SCK Ground Station";
             Size           = new Size(1280, 820);
             MinimumSize    = new Size(1100, 700);
             BackColor      = Theme.FormBack;
@@ -553,7 +553,7 @@ namespace OpenLstGroundStation
                 Padding   = new Padding(8, 0, 8, 0),
             };
 
-            var lblTitle = MkLabel("◈ OpenLST Ground Station", 10, 14, 280, Theme.Cyan, Theme.FontTitle);
+            var lblTitle = MkLabel("◈ SCK Ground Station", 10, 14, 280, Theme.Cyan, Theme.FontTitle);
 
             var lblPort = MkLabel("Port:", 300, 17, 38, Theme.Gray);
             cmbPort = new ComboBox
@@ -870,7 +870,7 @@ namespace OpenLstGroundStation
                 ForeColor       = Theme.White,
                 BorderStyle     = BorderStyle.FixedSingle,
                 Font            = Theme.FontMono,
-                PlaceholderText = "Path to OpenLST project folder",
+                PlaceholderText = "Path to SCK firmware project folder",
             };
             btnBrowseDir = MkButton("Browse…", lx + 548, row, 80, Theme.Gray, Theme.PanelBack);
             btnBrowseDir.Click += BtnBrowseDir_Click;
@@ -2054,7 +2054,7 @@ namespace OpenLstGroundStation
                 _flightWriter.WriteLine($"  \"date\": \"{DateTime.Now:yyyy-MM-dd}\",");
                 _flightWriter.WriteLine($"  \"launch_time\": \"{DateTime.Now:HH:mm:ss}\",");
                 _flightWriter.WriteLine($"  \"hardware\": \"SCK-915 + SCK-PBL-1\",");
-                _flightWriter.WriteLine($"  \"ground_station\": \"OpenLST Ground Station v1.2.0\",");
+                _flightWriter.WriteLine($"  \"ground_station\": \"SCK Ground Station v1.2.0\",");
                 _flightWriter.WriteLine($"  \"hwid\": \"{ActiveHwid:X4}\",");
                 _flightWriter.WriteLine("  \"packets\": [");
                 _flightWriter.Flush();
@@ -2243,7 +2243,7 @@ namespace OpenLstGroundStation
 <kml xmlns=""http://www.opengis.net/kml/2.2"">
   <Document>
     <name>SCK-915 Flight Track — {DateTime.Now:yyyy-MM-dd HH:mm:ss}</name>
-    <description>Flight track exported from OpenLST Ground Station
+    <description>Flight track exported from SCK Ground Station
 Total points: {track.Count}
 Launch time: {firstPt.Timestamp:HH:mm:ss}
 Max altitude: {maxAlt:F1}m ASL</description>
@@ -2300,7 +2300,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
         // ══════════════════════════════════════════════════════════════════
         private void BtnBrowseDir_Click(object sender, EventArgs e)
         {
-            using var dlg = new FolderBrowserDialog { Description = "Select OpenLST project directory" };
+            using var dlg = new FolderBrowserDialog { Description = "Select SCK firmware project directory" };
             if (dlg.ShowDialog() == DialogResult.OK) { txtProjectDir.Text = dlg.SelectedPath; SaveSettings(); }
         }
 
@@ -4061,7 +4061,7 @@ Board Type:    {r.BoardType}
 Board Serial:  {r.BoardSerial}
 Test Date:     {r.Timestamp:yyyy-MM-dd HH:mm:ss}
 Firmware:      {firmware}
-Test Tool:     OpenLST Ground Station + rtl_power (RTL-SDR Blog)
+Test Tool:     SCK Ground Station + rtl_power (RTL-SDR Blog)
 
 ──────────────────────────────────────────────────────────
 RF MEASUREMENTS
@@ -4120,7 +4120,7 @@ SpaceCommsKit · Tennessee, USA · spacecommskit.com
   <tr><td>Board Serial</td><td colspan="2">{{{r.BoardSerial}}}</td></tr>
   <tr><td>Test Date</td><td colspan="2">{{{r.Timestamp:yyyy-MM-dd HH:mm:ss}}}</td></tr>
   <tr><td>Firmware</td><td colspan="2">{{{(string.IsNullOrEmpty(r.Firmware) ? "Not recorded" : r.Firmware)}}}</td></tr>
-  <tr><td>Test Tool</td><td colspan="2">OpenLST Ground Station + rtl_power (RTL-SDR Blog V3/V4 drivers)</td></tr>
+  <tr><td>Test Tool</td><td colspan="2">SCK Ground Station + rtl_power (RTL-SDR Blog V3/V4 drivers)</td></tr>
 </table>
 
 <table>

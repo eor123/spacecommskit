@@ -115,7 +115,7 @@ Power Board 0001 from an external 5V supply.
 
 ### 3. Connect and Launch
 
-1. Open **OpenLST Ground Station** from the Start menu
+1. Open **SCK Ground Station** from the Start menu
 2. Select your COM port, set HWID to `0001`, click **Connect**
 3. Go to the **Commands** tab and click **Get Telem**
 4. Green ✓ response within 300ms — you are live
