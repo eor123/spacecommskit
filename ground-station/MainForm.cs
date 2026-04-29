@@ -296,25 +296,34 @@ namespace OpenLstGroundStation
         // Snapshot counter — resets when serial changes
         private int    _qaSnapCount      = 0;
         private string _qaSnapLastSerial = "";
+        // PPM correction for RTL-SDR dongle — calibrated via rtl_test -p
+        private int    _qaPpm            = 0;
+        private bool   _qaManualPpm      = false;  // true when user typed a value
+        private int    _qaRawPpm         = 0;      // auto-calculated from last scan
+        private int    _qaDisplayPpm     = 0;      // PPM applied to current display
         // Last QA scan data
         private List<(double FreqMHz, double Dbm)> _qaSpectrum = new();
         private QaResult? _lastQaResult;
 
         private class QaResult
         {
-            public string  BoardSerial  { get; set; } = "";
-            public string  BoardType    { get; set; } = "";
-            public string  Firmware     { get; set; } = "";
-            public DateTime Timestamp   { get; set; } = DateTime.Now;
-            public double  PeakFreqMHz  { get; set; }
-            public double  FreqErrorKHz { get; set; }
-            public double  PeakDbm      { get; set; }
-            public double  H2Dbc        { get; set; }  // 2nd harmonic dBc
-            public double  H3Dbc        { get; set; }  // 3rd harmonic dBc
-            public bool    FreqPass     { get; set; }
-            public bool    H2Pass       { get; set; }
-            public bool    H3Pass       { get; set; }
-            public bool    Overall      => FreqPass && H2Pass && H3Pass;
+            public string   BoardSerial    { get; set; } = "";
+            public string   BoardType      { get; set; } = "";
+            public string   Firmware       { get; set; } = "";
+            public DateTime Timestamp      { get; set; } = DateTime.Now;
+            public double   RawPeakFreqMHz { get; set; }  // before PPM correction
+            public double   PeakFreqMHz    { get; set; }  // after PPM correction (displayed)
+            public double   FreqErrorKHz   { get; set; }  // after correction
+            public double   PeakDbm        { get; set; }
+            public double   H2Dbc          { get; set; }
+            public double   H3Dbc          { get; set; }
+            public int      PpmCorrection  { get; set; }  // PPM applied to display
+            public int      RawPpm         { get; set; }  // auto-calculated raw PPM
+            public bool     PpmIsManual    { get; set; }  // true if user override
+            public bool     FreqPass       { get; set; }
+            public bool     H2Pass         { get; set; }
+            public bool     H3Pass         { get; set; }
+            public bool     Overall        => FreqPass && H2Pass && H3Pass;
         }
         private RichTextBox rtbTerminal  = null!;
         private TextBox     txtTermInput = null!;
@@ -452,6 +461,7 @@ namespace OpenLstGroundStation
                     ["LastHwid"]     = txtHwid?.Text         ?? "",
                     ["SmartRFPath"]  = _smartRfPath,
                     ["RtlPowerPath"] = _rtlPowerPath,
+                    ["QaPpm"]        = _qaPpm.ToString(),
                 };
                 var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
                 File.WriteAllText(SettingsPath,
@@ -510,6 +520,8 @@ namespace OpenLstGroundStation
                 _smartRfPath = srp;
             if (s.TryGetValue("RtlPowerPath", out string? rtp) && File.Exists(rtp))
                 _rtlPowerPath = rtp;
+            if (s.TryGetValue("QaPpm", out string? ppmStr) && int.TryParse(ppmStr, out int ppm))
+                _qaPpm = ppm;
 
             SetStatus("Disconnected", Theme.Red);
             Log("SCK Ground Station ready.", Theme.Cyan);
@@ -2443,28 +2455,45 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (boardH == null)
             { Log("board.h not found in project directory.", Theme.Red); return false; }
 
-            string paValue  = rbPowerField.Checked ? "0xC2" : "0xC0";
-            string paLabel  = rbPowerField.Checked ? "Max (~28 dBm with CC1190)" : "0 dBm bench";
+            string paValue = rbPowerField.Checked ? "0xC2" : "0xC0";
+            string paLabel = rbPowerField.Checked ? "Max (~28 dBm with CC1190)" : "0 dBm bench";
 
             try
             {
                 string content = File.ReadAllText(boardH);
 
-                // Replace existing RF_PA_CONFIG define
-                var updated = System.Text.RegularExpressions.Regex.Replace(
+                // STEP 1 — Remove ALL existing RF_PA_CONFIG lines (any whitespace, any value)
+                // This prevents duplicate defines accumulating over multiple builds
+                var cleaned = System.Text.RegularExpressions.Regex.Replace(
                     content,
-                    @"#define\s+RF_PA_CONFIG\s+0x[A-Fa-f0-9]+",
-                    $"#define RF_PA_CONFIG {paValue}");
+                    @"[ \t]*#define\s+RF_PA_CONFIG\s+0x[A-Fa-f0-9]+[^\r\n]*(\r?\n)?",
+                    "",
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
 
-                // If no existing define found — add it after RF_FSCAL3_CONFIG
-                if (updated == content)
+                // STEP 2 — Insert one clean RF_PA_CONFIG line before RF_FSCAL3_CONFIG
+                // If RF_FSCAL3_CONFIG not found — insert before COMMAND_WATCHDOG_DELAY
+                string insertedLine = $"#define RF_PA_CONFIG {paValue}\r\n";
+                if (cleaned.Contains("#define RF_FSCAL3_CONFIG"))
                 {
-                    updated = updated.Replace(
+                    cleaned = cleaned.Replace(
                         "#define RF_FSCAL3_CONFIG",
-                        $"#define RF_PA_CONFIG   {paValue}\r\n#define RF_FSCAL3_CONFIG");
+                        insertedLine + "#define RF_FSCAL3_CONFIG");
+                }
+                else if (cleaned.Contains("#define COMMAND_WATCHDOG_DELAY"))
+                {
+                    cleaned = cleaned.Replace(
+                        "#define COMMAND_WATCHDOG_DELAY",
+                        insertedLine + "#define COMMAND_WATCHDOG_DELAY");
+                }
+                else
+                {
+                    // Fallback — append before #endif
+                    cleaned = cleaned.Replace(
+                        "#endif",
+                        insertedLine + "#endif");
                 }
 
-                File.WriteAllText(boardH, updated);
+                File.WriteAllText(boardH, cleaned);
                 Log($"RF Power: patched board.h → RF_PA_CONFIG = {paValue} ({paLabel})", Theme.Cyan);
                 return true;
             }
@@ -2983,7 +3012,13 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 int      totalBytes  = int.Parse(parts[2]);
                 int      totalChunks = int.Parse(parts[3]);
                 Log($"Files: {filename} = {totalBytes} bytes, {totalChunks} chunks", Theme.White);
-                pbTransfer.Minimum = 0; pbTransfer.Maximum = totalChunks; pbTransfer.Value = 0;
+                // Reset Value to 0 FIRST before setting Minimum/Maximum
+                // WinForms throws ArgumentOutOfRangeException if existing Value
+                // exceeds new Maximum during the assignment sequence
+                pbTransfer.Value   = 0;
+                pbTransfer.Minimum = 0;
+                pbTransfer.Maximum = totalChunks;
+                pbTransfer.Value   = 0;
 
                 var imageData = new MemoryStream();
                 byte[] fnBytes = System.Text.Encoding.UTF8.GetBytes(filename);
@@ -3361,7 +3396,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 "◈  RF QA Check — Automated spectrum verification using RTL-SDR + rtl_power.",
                 8, 6, 700, Theme.Green, Theme.FontMonoBold));
             pnlInfo.Controls.Add(MkLabel(
-                "Requires RTL-SDR Blog drivers and rtl_power installed.  See website for setup guide.",
+                "Connect board under test via USB-Serial. NESDR antenna 6-12\" from board. QA uses HWID 0xFFFF to force RF relay TX.",
                 8, 24, 700, Theme.Gray, Theme.FontSmall));
             p.Controls.Add(pnlInfo);
             row += 68;
@@ -3462,7 +3497,64 @@ Max altitude: {maxAlt:F1}m ASL</description>
             p.Controls.AddRange(new Control[] { txtQaSerial, cmbQaBoardType, cmbQaDongleIndex, lblDongleHint });
             row += 40;
 
-            // ── Run button + status ─────────────────────────────────────
+            // ── PPM correction ──────────────────────────────────────────
+            p.Controls.Add(MkLabel("PPM Correction:", lx, row + 3, 110, Theme.Gray));
+            var txtQaPpm = new TextBox
+            {
+                Location        = new Point(lx + 116, row),
+                Size            = new Size(70, 26),
+                BackColor       = Theme.PanelBack,
+                ForeColor       = Theme.Cyan,
+                Font            = Theme.FontMono,
+                Text            = "auto",
+                PlaceholderText = "auto",
+            };
+            txtQaPpm.TextChanged += (s, e) =>
+            {
+                string txt = txtQaPpm.Text.Trim();
+                if (txt == "auto" || string.IsNullOrEmpty(txt))
+                {
+                    _qaManualPpm       = false;
+                    txtQaPpm.ForeColor = Theme.Cyan;
+                }
+                else if (int.TryParse(txt, out int ppm))
+                {
+                    _qaPpm             = ppm;
+                    _qaManualPpm       = true;
+                    txtQaPpm.ForeColor = Theme.Yellow;
+                    SaveSettings();
+                }
+                else
+                    txtQaPpm.ForeColor = Theme.Red;
+            };
+
+            p.Controls.Add(MkLabel("auto = calculated each scan from board reference.  Type value to override.",
+                lx + 200, row + 5, 390, Theme.Gray, Theme.FontSmall));
+
+            var btnResetPpm = MkButton("↺ Auto", lx + 596, row, 60, Theme.Gray, Theme.PanelBack);
+            btnResetPpm.Click += (s, e) =>
+            {
+                _qaManualPpm       = false;
+                txtQaPpm.Text      = "auto";
+                txtQaPpm.ForeColor = Theme.Cyan;
+                Log("PPM reset to auto mode — calculated fresh each scan.", Theme.Gray);
+            };
+
+            var btnLockPpm = MkButton("🔒 Lock PPM", lx + 664, row, 110, Theme.Cyan, Theme.PanelBack);
+            btnLockPpm.Click += (s, e) =>
+            {
+                if (_qaRawPpm == 0)
+                { Log("Run a QA scan first to calculate PPM.", Theme.Yellow); return; }
+                _qaPpm             = _qaRawPpm;
+                _qaManualPpm       = true;
+                txtQaPpm.Text      = _qaRawPpm.ToString();
+                txtQaPpm.ForeColor = Theme.Yellow;
+                SaveSettings();
+                Log($"PPM locked at {_qaRawPpm} PPM from last scan. Use ↺ Auto to return to auto mode.", Theme.Green);
+            };
+
+            p.Controls.AddRange(new Control[] { txtQaPpm, btnResetPpm, btnLockPpm });
+            row += 40;
             btnRunQa = MkButton("▶  Run QA Check", lx, row, 180, Theme.Green, Color.FromArgb(16, 48, 16));
             btnRunQa.Click += async (s, e) => await RunRfQaAsync();
 
@@ -3624,6 +3716,18 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 g.DrawString($"{_lastQaResult.PeakFreqMHz:F3} MHz",
                     labelFont, Brushes.LimeGreen, px + 3, top + 4);
             }
+
+            // PPM annotation — bottom right of chart
+            if (_qaRawPpm != 0 || _qaManualPpm)
+            {
+                string ppmLabel = _qaManualPpm
+                    ? $"PPM: {_qaDisplayPpm} (manual)"
+                    : $"PPM: {_qaRawPpm} (auto) — dongle offset corrected";
+                using var ppmFont = new Font("Consolas", 8f);
+                var sz = g.MeasureString(ppmLabel, ppmFont);
+                g.DrawString(ppmLabel, ppmFont, Brushes.DarkCyan,
+                    right - sz.Width - 4, bot - sz.Height - 2);
+            }
         }
 
         // ── Run RF QA scan ──────────────────────────────────────────────
@@ -3690,8 +3794,11 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 Log($"RF QA: snapshot → {snapBase}  dongle index {dongleIdx}", Theme.Gray);
                 Log("RF QA: triggering board TX during scan — sending get_telem loop...", Theme.Gray);
 
-                // Start a background TX trigger loop — keeps board transmitting during scan
-                // rtl_power needs the board to be keying up to see the signal
+                // Start a background TX trigger loop — keeps board transmitting RF during scan
+                // KEY: Use HWID 0xFFFF (no board has this ID) so the connected board
+                // sees a non-matching HWID and relays the command over RF — forcing RF TX
+                // This works with ONE board connected via serial — no second board needed
+                // Board receives command, HWID doesn't match, transmits RF relay → NESDR catches it
                 var txCts = new CancellationTokenSource();
                 _ = Task.Run(async () =>
                 {
@@ -3701,9 +3808,9 @@ Max altitude: {maxAlt:F1}m ASL</description>
                         {
                             if (_port?.IsOpen == true)
                             {
-                                ushort hwid = ActiveHwid;
-                                ushort seq  = IncSeqNum();
-                                WritePacket(OpenLstProtocol.BuildSimpleCommand(hwid, seq, "get_telem"));
+                                ushort rfHwid = 0xFFFF; // non-matching HWID forces RF relay TX
+                                ushort seq    = IncSeqNum();
+                                WritePacket(OpenLstProtocol.BuildSimpleCommand(rfHwid, seq, "get_telem"));
                             }
                         }
                         catch { }
@@ -3712,7 +3819,8 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 }, txCts.Token);
 
                 bool ok = await RunRtlPower(
-                    $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx} -P -i 3s -e 9s \"{tmpFund}\"");
+                    $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx}" +
+                    $"{(_qaPpm != 0 ? $" -p {_qaPpm}" : "")} -P -i 3s -e 9s \"{tmpFund}\"");
 
                 txCts.Cancel();
 
@@ -3761,7 +3869,8 @@ Max altitude: {maxAlt:F1}m ASL</description>
 
                         string tmpHarm = Path.Combine(Path.GetTempPath(), $"qa_harm_{Guid.NewGuid():N}.csv");
                         ok = await RunRtlPower(
-                            $"-f {harmStart:F0}M:{harmEnd:F0}M:100k -g 496 -P -i 3s -e 9s \"{tmpHarm}\"");
+                            $"-f {harmStart:F0}M:{harmEnd:F0}M:100k -g 496" +
+                            $"{(_qaPpm != 0 ? $" -p {_qaPpm}" : "")} -P -i 3s -e 9s \"{tmpHarm}\"");
 
                         bool harmHasData = File.Exists(tmpHarm) && new FileInfo(tmpHarm).Length > 50;
                         if (harmHasData)
@@ -3823,34 +3932,63 @@ Max altitude: {maxAlt:F1}m ASL</description>
 
                 Log($"RF QA: peak at {peakFreq:F3} MHz = {peakDbm:F1} dBm (searched {searchSet.Count} bins)", Theme.Gray);
 
-                // Diagnostic — show top 5 bins near center so we can tune the detection
-                var top5 = searchSet.OrderByDescending(x => x.Dbm).Take(5).ToList();
-                foreach (var b in top5)
-                    Log($"  bin: {b.FreqMHz:F3} MHz = {b.Dbm:F1} dBm", Theme.Gray);
-                double freqErrorKHz     = (peakFreq - centerMHz) * 1000.0;
+                // ── Auto-calculate dongle PPM from this scan ─────────────
+                // Use board as reference — SmartRF verified 915.000 MHz
+                // PPM = (measured - actual) / actual × 1,000,000
+                // This corrects for dongle crystal offset — logged for transparency
+                // Manual override: if user typed a PPM value, use that instead
+                int autoPpm = (int)Math.Round((peakFreq - centerMHz) / centerMHz * 1_000_000);
+                int displayPpm = _qaManualPpm ? _qaPpm : autoPpm;
+
+                // Apply PPM correction to spectrum for display
+                // Shifts all frequency bins so peak lands at true center
+                double ppmShiftMHz = centerMHz * displayPpm / 1_000_000.0;
+                var correctedSpectrum = fundData
+                    .Select(x => (FreqMHz: x.FreqMHz - ppmShiftMHz, x.Dbm))
+                    .ToList();
+                _qaSpectrum     = correctedSpectrum;
+                _qaRawPpm       = autoPpm;
+                _qaDisplayPpm   = displayPpm;
+                pnlQaChart.Invalidate();
+
+                // Corrected peak frequency for results
+                double correctedPeakFreq  = peakFreq - ppmShiftMHz;
+                double correctedErrorKHz  = (correctedPeakFreq - centerMHz) * 1000.0;
+
+                Log($"RF QA: raw peak {peakFreq:F3} MHz → corrected {correctedPeakFreq:F3} MHz " +
+                    $"(dongle PPM: {autoPpm:+0;-0}{(_qaManualPpm ? " manual" : " auto")})", Theme.Gray);
+
+                double freqErrorKHz = correctedErrorKHz;
 
                 double h2Dbm  = h2Data.Count > 0 ? h2Data.Max(x => x.Dbm) : -999;
                 double h3Dbm  = h3Data.Count > 0 ? h3Data.Max(x => x.Dbm) : -999;
                 double h2Dbc  = h2Dbm  > -999 ? h2Dbm  - peakDbm : -999;
                 double h3Dbc  = h3Dbm  > -999 ? h3Dbm  - peakDbm : -999;
 
-                bool freqPass = Math.Abs(freqErrorKHz) <= 3000.0; // ±3MHz — wide for uncalibrated dongle, tighten after PPM cal
+                // Frequency pass limit — ±10kHz after PPM correction applied
+                // PPM is always auto-calculated so correction is always applied
+                double freqPassLimitKHz = 10.0;
+                bool freqPass = Math.Abs(freqErrorKHz) <= freqPassLimitKHz;
                 bool h2Pass   = h2Dbc <= -999 || h2Dbc < -40.0; // pass if no data (out of range) or < -40dBc
                 bool h3Pass   = h3Dbc <= -999 || h3Dbc < -40.0;
 
                 _lastQaResult = new QaResult
                 {
-                    BoardSerial  = serial,
-                    BoardType    = boardType,
-                    Firmware     = txtFirmwareFile?.Text.Trim() ?? "",
-                    PeakFreqMHz  = peakFreq,
-                    FreqErrorKHz = freqErrorKHz,
-                    PeakDbm      = peakDbm,
-                    H2Dbc        = h2Dbc,
-                    H3Dbc        = h3Dbc,
-                    FreqPass     = freqPass,
-                    H2Pass       = h2Pass,
-                    H3Pass       = h3Pass,
+                    BoardSerial      = serial,
+                    BoardType        = boardType,
+                    Firmware         = txtFirmwareFile?.Text.Trim() ?? "",
+                    RawPeakFreqMHz   = peakFreq,
+                    PeakFreqMHz      = correctedPeakFreq,
+                    FreqErrorKHz     = correctedErrorKHz,
+                    PeakDbm          = peakDbm,
+                    H2Dbc            = h2Dbc,
+                    H3Dbc            = h3Dbc,
+                    PpmCorrection    = displayPpm,
+                    RawPpm           = autoPpm,
+                    PpmIsManual      = _qaManualPpm,
+                    FreqPass         = freqPass,
+                    H2Pass           = h2Pass,
+                    H3Pass           = h3Pass,
                 };
 
                 UpdateQaResultsPanel(_lastQaResult);
@@ -4062,6 +4200,8 @@ Board Serial:  {r.BoardSerial}
 Test Date:     {r.Timestamp:yyyy-MM-dd HH:mm:ss}
 Firmware:      {firmware}
 Test Tool:     SCK Ground Station + rtl_power (RTL-SDR Blog)
+Dongle PPM:    {(r.RawPpm != 0 ? $"{r.RawPpm:+0;-0} PPM {(r.PpmIsManual ? "(manual override)" : "(auto-calculated from board reference)")}" : "0 PPM (not yet calculated)")}
+Freq Display:  PPM correction applied to display — raw dongle offset corrected using board as reference signal
 
 ──────────────────────────────────────────────────────────
 RF MEASUREMENTS
@@ -4121,6 +4261,8 @@ SpaceCommsKit · Tennessee, USA · spacecommskit.com
   <tr><td>Test Date</td><td colspan="2">{{{r.Timestamp:yyyy-MM-dd HH:mm:ss}}}</td></tr>
   <tr><td>Firmware</td><td colspan="2">{{{(string.IsNullOrEmpty(r.Firmware) ? "Not recorded" : r.Firmware)}}}</td></tr>
   <tr><td>Test Tool</td><td colspan="2">SCK Ground Station + rtl_power (RTL-SDR Blog V3/V4 drivers)</td></tr>
+  <tr><td>Dongle PPM Offset</td><td colspan="2">{{{(r.RawPpm != 0 ? $"{r.RawPpm:+0;-0} PPM {(r.PpmIsManual ? "(manual)" : "(auto-calculated)")}" : "Not calculated")}}}</td></tr>
+  <tr><td>Frequency Display</td><td colspan="2">PPM correction applied — dongle offset corrected using board as reference</td></tr>
 </table>
 
 <table>

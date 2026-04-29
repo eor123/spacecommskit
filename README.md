@@ -444,14 +444,20 @@ Modulation:         2-FSK
 Data rate:          7.415 kBaud
 Deviation:          3.708 kHz
 RX bandwidth:       60.268 kHz
-Output power:       +28 dBm (CC1190 PA)
+Output power:       +28 dBm (CC1190 PA datasheet spec — calibrated
+                    measurement pending TinySA arrival)
 ```
 
 **RF Characterization — Prototype Units:**
 
 RF characterization was performed on two prototype SCK-915 boards using SDR verification.
 Both units show a clean 915.000 MHz center frequency with well-formed 2-FSK modulation
-and no observable harmonic artifacts.
+and no observable harmonic artifacts at the SDR receiver.
+
+Output power has not yet been independently verified with calibrated test equipment.
+The +28 dBm figure is derived from CC1190 datasheet specifications at the selected
+PA_TABLE0 register setting. Calibrated power measurement will be performed when
+TinySA Ultra+ test equipment arrives and results will be published openly.
 
 As production scales we will characterize additional units and publish aggregate RF
 performance data. Batch-to-batch variation is expected in small-run hand-assembled
