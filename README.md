@@ -1,4 +1,4 @@
-# SpaceCommsKit — OpenLST Explorer Kit + SCK-PBL-1 Payload Platform
+# SpaceCommsKit — SCK-915 Explorer Kit + SCK-PBL-1 Payload Platform
 
 > **Flight-heritage RF communications technology. Now in your lab — and in the stratosphere.**
 
@@ -7,7 +7,7 @@
 [![Hardware: CC1110](https://img.shields.io/badge/Hardware-CC1110%20915MHz-green)](https://github.com/eor123/spacecommskit)
 [![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-orange)](https://github.com/eor123/spacecommskit)
 
-The **OpenLST Explorer Kit** is a complete RF communications development kit built on the open-source [OpenLST](https://github.com/eor123/openlst) radio platform — the same design heritage as Planet Labs' Dove satellite Low-Speed Transceiver, which has accumulated over **200 cumulative years of on-orbit data** across more than 150 satellites.
+The **SCK-915 Explorer Kit** is a complete RF communications development kit built on the open-source [OpenLST](https://github.com/eor123/openlst) radio platform — the same design heritage as Planet Labs' Dove satellite Low-Speed Transceiver, which has accumulated over **200 cumulative years of on-orbit data** across more than 150 satellites.
 
 This repository contains everything you need to get started:
 
@@ -18,7 +18,7 @@ This repository contains everything you need to get started:
 
 ---
 
-## What is the OpenLST Explorer Kit?
+## What is the SCK-915 Explorer Kit?
 
 Two CC1110 + CC1190-based radio boards operating at **915 MHz** ISM band (no license required), with a full Windows ground station for commanding, monitoring, live GPS tracking, remote imaging, and flight recording over RF.
 
@@ -78,15 +78,15 @@ spacecommskit/
 │       ├── AppLogger.cs          Daily log file writer
 │       └── Program.cs
 ├── installer/
-│   ├── OpenLST_Ground_Station.iss
-│   └── OpenLST_Ground_Station_Setup_v1.2.0.exe
+│   ├── OpenLST_Ground_Station.iss         ← Inno Setup script
+│   └── SCK_Ground_Station_Setup_v1.2.0.exe
 ├── pico/                         Raspberry Pi Pico MicroPython firmware
 │   ├── main.py                   Main pipeline — camera, SD, GPS, altimeter, commands
 │   ├── sdcard.py                 MicroPython SD card SPI driver
 │   └── gps_test.py               Standalone GPS test and verification script
 ├── docs/
-│   ├── OpenLST_Explorer_Kit_User_Guide.pdf
-│   └── OpenLST_Explorer_Kit_Developer_Guide.pdf
+│   ├── SCK-915_Explorer_Kit_User_Guide.pdf
+│   └── SCK-915_Explorer_Kit_Developer_Guide.pdf
 └── tools/
     └── README.md
 ```
@@ -99,7 +99,7 @@ spacecommskit/
 
 Download and run:
 ```
-installer\OpenLST_Ground_Station_Setup_v1.2.0.exe
+installer\SCK_Ground_Station_Setup_v1.2.0.exe
 ```
 No prerequisites — the .NET 8 runtime is bundled. Requires Windows 10 (1809) or later.
 
@@ -369,7 +369,7 @@ dotnet publish OpenLstGroundStation\OpenLstGroundStation.csproj ^
 ### Building the Installer
 
 1. Install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
-2. Open `installer\OpenLST_Ground_Station.iss`
+2. Open `installer\OpenLST_Ground_Station.iss` in Inno Setup
 3. Press **F9** to compile
 
 ### CC1110 Radio Firmware
@@ -391,7 +391,7 @@ mingw32-make openlst_437_radio
 
 Note: The `tail` memory summary warning on Windows is cosmetic — the hex file builds successfully.
 
-See the [Developer Guide](docs/OpenLST_Explorer_Kit_Developer_Guide.pdf) for full build instructions.
+See the [Developer Guide](docs/SCK-915_Explorer_Kit_Developer_Guide.pdf) for full build instructions.
 
 ---
 
@@ -482,6 +482,17 @@ via Section 7.
 ## Changelog
 
 ### v1.2.0
+- **Rebranded: SCK Ground Station** (formerly OpenLST Ground Station)
+- RF QA tab — automated spectrum verification via rtl_power + RTL-SDR
+- 2-FSK center frequency detection, PASS/FAIL per board, printable certificate
+- Snapshot naming system (SCK915_SERIAL_snap001_fund.csv)
+- RTL-SDR tools bundled in installer (rtlsdr\ folder, GPLv2)
+- SD black box flight recorder — .sckflight written on every boot
+- Beacon ON/OFF control (sub-opcode 0x09)
+- GPS blind handling — last known position shown in yellow when fix lost
+- RF Power Mode — bench/field toggle patches board.h before OTA build
+- SmartRF path configurable and persisted in appsettings.json
+- OTA flash progress bar reset fix (second flash crash resolved)
 - Fused GPS + barometric altimeter beacon (8-field packet)
 - MS5611 aviation-grade altimeter (replaces BMP581 — better HAB altitude range)
 - Flight recorder — .sckflight + .kml auto-generated on every flight
