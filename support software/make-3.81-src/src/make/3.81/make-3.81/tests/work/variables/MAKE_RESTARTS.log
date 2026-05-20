@@ -1,3 +1,0 @@
-MAKE_RESTARTS=
-work/variables/MAKE_RESTARTS.mk:4: foo.x: No such file or directory
-MAKE_RESTARTS=1
