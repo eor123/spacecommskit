@@ -1,20 +1,36 @@
-# SpaceCommsKit — SCK-915 Explorer Kit + SCK-PBL-1 Payload Platform
+# SpaceCommsKit — SCK-915 Explorer Kit + SCK-2400 CCSDS Platform + SCK-PBL-1 Payload
 
 > **Flight-heritage RF communications technology. Now in your lab — and in the stratosphere.**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue)](https://github.com/eor123/spacecommskit)
-[![Hardware: CC1110](https://img.shields.io/badge/Hardware-CC1110%20915MHz-green)](https://github.com/eor123/spacecommskit)
+[![Hardware: CC1110](https://img.shields.io/badge/SCK--915-CC1110%20915MHz-green)](https://github.com/eor123/spacecommskit)
+[![Hardware: CC1352P](https://img.shields.io/badge/SCK--2400-CC1352P%202.4GHz-blue)](https://github.com/eor123/spacecommskit)
 [![Version: 1.2.0](https://img.shields.io/badge/Version-1.2.0-orange)](https://github.com/eor123/spacecommskit)
 
-The **SCK-915 Explorer Kit** is a complete RF communications development kit built on the open-source [OpenLST](https://github.com/eor123/openlst) radio platform — the same design heritage as Planet Labs' Dove satellite Low-Speed Transceiver, which has accumulated over **200 cumulative years of on-orbit data** across more than 150 satellites.
+This repository is home to **two RF communications platforms** and a shared payload board:
+
+- **SCK-915 Explorer Kit** — a complete RF communications development kit built on the
+  open-source [OpenLST](https://github.com/eor123/openlst) radio platform, the same design
+  heritage as Planet Labs' Dove satellite Low-Speed Transceiver (200+ cumulative years of
+  on-orbit data across 150+ satellites). Operates at 915MHz, no license required.
+- **SCK-2400** — a 2.4GHz platform built on the Texas Instruments CC1352P, speaking
+  **CCSDS Space Packet Protocol** — the same packet standard used by real spacecraft —
+  with Over-Air Download (OAD) firmware updates and full RF range performance suitable for
+  LEO ground station passes.
+- **SCK-PBL-1 Payload Board** — a Raspberry Pi Pico-based payload (camera, GPS, barometric
+  altimeter, SD flight logging) shared unchanged between both radio platforms.
 
 This repository contains everything you need to get started:
 
-- ✅ Windows ground station application (C# .NET 8) with live GPS map, flight recorder, and replay
-- ✅ Raspberry Pi Pico firmware (MicroPython) — camera, SD, GPS, altimeter, fused telemetry
+- ✅ Windows ground station application (C# .NET 8) — supports both SCK-915 (OpenLST) and
+  SCK-2400 (CCSDS) boards, with live GPS map, flight recorder, replay, and OAD firmware updates
+- ✅ SCK-915 CC1110 radio firmware (C, SDCC) — OpenLST-based, 915MHz
+- ✅ SCK-2400 CC1352P firmware (C, TI-RTOS7) — CCSDS framing, OAD streaming, payload bridge
+- ✅ Raspberry Pi Pico firmware (MicroPython) — camera, SD, GPS, altimeter, fused telemetry —
+  shared unchanged between SCK-915 and SCK-2400
 - ✅ Windows installer (.exe) — no prerequisites, .NET 8 runtime bundled
-- ✅ User Guide and Developer Guide (PDF)
+- ✅ User Guides and Developer Guides (Markdown) for both platforms, plus dev-log bringup notes
 
 ---
 
@@ -64,6 +80,126 @@ Windows Ground Station
 
 ---
 
+## What is SCK-2400?
+
+SCK-2400 is a 2.4GHz platform built on the **Texas Instruments CC1352P**
+SimpleLink wireless MCU (LAUNCHXL-CC1352P-2 for development; CC2652P1FRGZ
+for the production SCK-2400 board). Unlike SCK-915's OpenLST packet
+protocol, SCK-2400 speaks **CCSDS Space Packet Protocol** — the same
+framing standard used on real spacecraft — and adds:
+
+```
+Windows Ground Station (SCK-2400 / CCSDS mode)
+        │  CCSDS command/telemetry framing
+        │  Over-Air Download (OAD) — full firmware update over RF
+        │  Same GPS map, flight recorder, custom commands as SCK-915
+        │
+        │ USB · 921600 baud · XDS110
+        │
+  SCK-2400 Board (APID 0x010 · CC1352P · Ground Station)
+        │
+        │ RF 2.4GHz ISM band
+        │
+  SCK-2400 Board (APID 0x011 · CC1352P · Remote)
+        │
+        │ UART · 115200 baud · ESP framing (CC1352P↔Pico bridge)
+        │
+  Raspberry Pi Pico (SCK-PBL-1 Payload Board — unchanged from SCK-915)
+        │  OV2640 Camera + MicroSD Card
+        │  GPS6MV2 (NEO-6M) + MS5611/BMP581 altimeter
+        │  Fused GPS+baro beacon every 10 seconds
+```
+
+**Key capabilities:**
+- CCSDS Space Packet Protocol — APID-based addressing, command ACKs,
+  telemetry beacons
+- **OAD (Over-Air Download)** — stream a full firmware image (~335KB) to
+  a remote board in **~24 seconds** at the production 10ms inter-chunk
+  setting, about 5% of a typical 8-minute LEO ground station pass. BIM
+  (Boot Image Manager) guarantees a failed OAD never bricks the board —
+  the previous working firmware always remains bootable.
+- **CCSDS↔ESP payload bridge** — the SCK-2400 remote board transparently
+  translates CCSDS commands to ESP-framed commands for the Pico payload
+  board. `main.py` requires **zero changes** between SCK-915 and SCK-2400.
+- Same Ground Station app, same GPS/Map tab, same flight recorder/replay,
+  same custom command framework — select "SCK-2400 (CCSDS)" from the
+  Board dropdown.
+
+See the [SCK-2400 User Guide](docs/SCK-2400_User_Guide.md) and
+[SCK-2400 Developer Guide](docs/SCK-2400_Developer_Guide.md) for full
+details, including the CCSDS opcode reference, OAD protocol, and SysConfig
+hardware configuration.
+
+> **Status:** SCK-2400 is in active bringup on LAUNCHXL-CC1352P-2
+> development hardware. OAD streaming and the CCSDS↔ESP payload bridge
+> are RF-verified end to end (~2 second round trip). Production CC2652P
+> hardware is planned. See the
+> [dev log](docs/dev-log/) for bringup notes and hard-won lessons.
+
+---
+
+## What is SCK-PBL-1?
+
+The **SCK-PBL-1** is a Raspberry Pi Pico-based payload board — a complete,
+self-contained sensor and imaging package that bolts onto either SCK-915
+or SCK-2400 over a simple two-wire UART. It's the part of the system that
+actually goes up: the camera, the GPS, the altimeter, the SD card flight
+recorder.
+
+```
+SCK-PBL-1 Payload Board (Raspberry Pi Pico)
+        │
+        ├── OV2640 Camera ──────── JPEG snapshots to MicroSD
+        ├── MicroSD Card ────────── flight log (.sckflight) + images
+        ├── GPS6MV2 (NEO-6M) ────── airborne mode, rated to 50km
+        ├── MS5611 / BMP581 ─────── aviation-grade barometric altimeter
+        │
+        └── Fused GPS + baro beacon every 10 seconds
+                   │
+                   ▼
+        UART, 115200 baud, ESP framing
+                   │
+        ┌──────────┴──────────┐
+        │                      │
+   SCK-915 (CC1110)      SCK-2400 (CC1352P)
+   915MHz · OpenLST       2.4GHz · CCSDS
+```
+
+**One payload board, two radio platforms — zero firmware changes.**
+`main.py` is identical whether it's talking to an SCK-915 board over
+OpenLST `PICO_MSG` sub-opcodes or an SCK-2400 board over the CCSDS↔ESP
+bridge. The Pico has no idea which radio it's attached to.
+
+**What it does:**
+- Captures JPEG images on command (`SNAP`) and stores them to MicroSD
+- Lists, downloads (chunked), and deletes files on the SD card over RF
+- Reports temperature, barometric pressure/altitude, and GPS position
+  on demand
+- Transmits a fused GPS + barometric telemetry beacon autonomously every
+  10 seconds — no polling required during a flight
+- Logs every beacon to a `.sckflight` file for post-flight replay and KML
+  export to Google Earth
+- Runs the NEO-6M GPS in **Airborne (<1g) dynamic mode** at startup,
+  removing the standard 18km CoCom altitude limit — rated to 50km, well
+  above any amateur balloon ceiling
+
+**Status indicators onboard** (camera, SD, GPS fix, altimeter, fault, and
+power rail LEDs) give an at-a-glance health check without a laptop —
+useful when you're standing in a field at 6am before a balloon launch.
+
+Full wiring tables, power architecture, and the sub-opcode/response
+reference are in [Pico Payload Setup](#pico-payload-setup-sck-pbl-1) and
+[SCK-PBL-1 Power Architecture](#sck-pbl-1-power-architecture) below. For
+the SCK-2400 CCSDS opcode mapping, see the
+[SCK-2400 Developer Guide §3.5](docs/SCK-2400_Developer_Guide.md).
+
+> **Status:** SCK-PBL-1 has flown on SCK-915 HAB missions and is
+> RF-verified end-to-end on SCK-2400 (bench + RF range). A standalone
+> product page and BOM are planned — see
+> [spacecommskit.com](https://www.spacecommskit.com) for updates.
+
+---
+
 ## Repository Structure
 
 ```
@@ -71,22 +207,37 @@ spacecommskit/
 ├── ground-station/               C# .NET 8 WinForms ground station (VS2022)
 │   ├── OpenLstGroundStation.sln
 │   └── OpenLstGroundStation/
-│       ├── MainForm.cs           All UI — tabs, GPS map, flight recorder
+│       ├── MainForm.cs           All UI — tabs, GPS map, flight recorder,
+│       │                         OAD controls, SCK-915/SCK-2400 board switch
 │       ├── FlightReplayForm.cs   Flight replay — animated map + altitude chart
-│       ├── OpenLstProtocol.cs    Packet framing, parsing, AES signing
-│       ├── CustomCommand.cs      JSON-persistent custom commands
+│       ├── OpenLstProtocol.cs    SCK-915 packet framing, parsing, AES signing
+│       ├── CcsdsProtocol.cs      SCK-2400 CCSDS packet framing + opcodes
+│       ├── CustomCommand.cs      JSON-persistent custom commands (both platforms)
 │       ├── AppLogger.cs          Daily log file writer
 │       └── Program.cs
 ├── installer/
 │   ├── OpenLST_Ground_Station.iss         ← Inno Setup script
 │   └── SCK_Ground_Station_Setup_v1.2.0.exe
-├── pico/                         Raspberry Pi Pico MicroPython firmware
+├── sck2400_firmware/              CC1352P firmware (CCS Theia / TI-RTOS7)
+│   ├── sck2400.syscfg              SysConfig — UART/SPI/RF pin assignments
+│   ├── main.c / main.h             RTOS tasks, rfTask
+│   ├── uart.c / uart.h             CCSDS dispatch + CCSDS↔ESP payload bridge
+│   ├── ccsds.h                     CCSDS packet structs + command opcodes
+│   ├── radio.c / radio.h           RF driver wrapper
+│   ├── telemetry.c / telemetry.h   Telemetry collection
+│   └── oad_*.c                     OAD ext-flash transport + image header
+├── pico/                          Raspberry Pi Pico MicroPython firmware
+│   │                              (shared, unchanged, between SCK-915 & SCK-2400)
 │   ├── main.py                   Main pipeline — camera, SD, GPS, altimeter, commands
 │   ├── sdcard.py                 MicroPython SD card SPI driver
 │   └── gps_test.py               Standalone GPS test and verification script
 ├── docs/
-│   ├── SCK-915_Explorer_Kit_User_Guide.pdf
-│   └── SCK-915_Explorer_Kit_Developer_Guide.pdf
+│   ├── SCK-915_User_Guide.md
+│   ├── SCK-915_Developer_Guide.md
+│   ├── SCK-2400_User_Guide.md
+│   ├── SCK-2400_Developer_Guide.md
+│   └── dev-log/                  Bringup session notes — debugging narratives
+│       └── SCK-2400_Session10-11_OAD_PayloadBridge.md
 └── tools/
     └── README.md
 ```
@@ -116,9 +267,17 @@ Power Board 0001 from an external 5V supply.
 ### 3. Connect and Launch
 
 1. Open **SCK Ground Station** from the Start menu
-2. Select your COM port, set HWID to `0001`, click **Connect**
-3. Go to the **Commands** tab and click **Get Telem**
-4. Green ✓ response within 300ms — you are live
+2. Select **SCK-915 (OpenLST)** from the Board dropdown (top right) —
+   this is the default
+3. Select your COM port, set HWID to `0001`, click **Connect**
+4. Go to the **Commands** tab and click **Get Telem**
+5. Green ✓ response within 300ms — you are live
+
+> **Using SCK-2400 instead?** Select **SCK-2400 (CCSDS)** from the Board
+> dropdown, connect to the Ground Station board's XDS110 COM port at
+> 921600 baud, and click **Get Telem** on the Commands tab — you should
+> see a `tlm_beacon` response. See the
+> [SCK-2400 User Guide](docs/SCK-2400_User_Guide.md) for full setup.
 
 ---
 
@@ -197,6 +356,15 @@ Fused beacon that will go over RF:
 | `0x07` | GET_GPS | `GPS:<lat>,<lon>,<gps_alt>,<sats>,<fix>,<hpa>,<baro_alt>,<temp_c>` |
 | `0x08` | GET_BARO | `BARO:<hpa>,<alt_m>,<temp_c>` |
 
+> **Note — SCK-2400 opcode mapping:** the table above shows the Pico's
+> native ESP sub-opcodes (used directly by SCK-915 under CCSDS opcode
+> `0x20` PICO_MSG). On SCK-2400, each of these is exposed as its **own
+> CCSDS opcode** (`0x20`–`0x29`) — e.g. `GET_GPS` is CCSDS opcode `0x27`,
+> not `0x20` with payload `0x07`. The Pico-side sub-opcodes and response
+> formats are identical; only the CCSDS-facing opcode differs. See the
+> [SCK-2400 Developer Guide §3.5](docs/SCK-2400_Developer_Guide.md) for
+> the full mapping table.
+
 ### Fused GPS + Baro Packet Format
 
 ```
@@ -223,14 +391,14 @@ At startup the firmware sends a **UBX CFG-NAV5 command** to configure the NEO-6M
 
 | Tab | Function |
 |-----|----------|
-| Home | Live telemetry — uptime, RSSI, LQI, packet counts |
-| Commands | Standard OpenLST commands — get_telem, reboot, set_callsign |
-| Firmware | Build (SDCC/mingw32-make), sign (CBC-MAC AES), OTA flash over RF |
+| Home | Live telemetry — uptime, RSSI, LQI, packet counts (SCK-915) or CCSDS telemetry beacon (SCK-2400) |
+| Commands | SCK-915: standard OpenLST commands (get_telem, reboot, set_callsign). SCK-2400: CCSDS commands + **OAD controls** (Start/Status/Abort, inter-chunk delay) |
+| Firmware | SCK-915: build (SDCC/mingw32-make), sign (CBC-MAC AES), OTA flash over RF. SCK-2400: CCS Theia build, RF power mode + board role patching, merged BIM+app flash |
 | Terminal | Raw command terminal |
-| Custom Commands | Save and send custom opcode/payload commands to Pico |
+| Custom Commands | Save and send custom opcode/payload commands to Pico — works on both platforms |
 | Files | Browse, download, delete files from Pico SD card over RF |
-| GPS / Map | Live GPS on Google Maps, fused telemetry, flight recorder, replay |
-| Provision | Flash bootloader to fresh CC1110 via CC Debugger |
+| GPS / Map | Live GPS on Google Maps, fused telemetry, flight recorder, replay — works on both platforms |
+| Provision | SCK-915: flash bootloader to fresh CC1110 via CC Debugger. SCK-2400: flash BIM + set board APID |
 
 ### GPS / Map Tab
 - Live position on **Google Maps** via GMap.NET
@@ -391,7 +559,27 @@ mingw32-make openlst_437_radio
 
 Note: The `tail` memory summary warning on Windows is cosmetic — the hex file builds successfully.
 
-See the [Developer Guide](docs/SCK-915_Explorer_Kit_Developer_Guide.pdf) for full build instructions.
+See the [SCK-915 Developer Guide](docs/SCK-915_Developer_Guide.md) for full build instructions.
+
+### CC1352P Radio Firmware (SCK-2400)
+
+Requirements:
+- [TI Code Composer Studio (Theia)](https://www.ti.com/tool/CCSTUDIO)
+- [SimpleLink CC13xx/CC26xx SDK](https://www.ti.com/tool/SIMPLELINK-CC13XX-CC26XX-SDK) (8.32.00.07)
+- TI-RTOS7, TI Clang toolchain (bundled with CCS)
+- XDS110 debug probe (onboard the LAUNCHXL-CC1352P-2)
+
+The Ground Station's **Firmware** tab drives a headless CCS build directly
+from the GUI — set **Project Dir** to `sck2400_firmware/`, choose
+**Board Role** (Ground Station / Remote) and **RF Power Mode**
+(Bench / Field), then **Clean + Build** and **Flash**. This patches
+`SCK_APID_THIS_BOARD`, `TX_POWER`, and the OAD image header automatically.
+
+To build manually in CCS Theia, open `sck2400_firmware/` as a project and
+use **Project → Build**. See the
+[SCK-2400 Developer Guide](docs/SCK-2400_Developer_Guide.md) for the full
+SysConfig pin configuration, OAD image header patching details, and the
+CCSDS↔ESP payload bridge architecture.
 
 ---
 
@@ -473,6 +661,11 @@ via Section 7.
 
 | Resource | Link |
 |----------|------|
+| SCK-915 User Guide | [docs/SCK-915_User_Guide.md](docs/SCK-915_User_Guide.md) |
+| SCK-915 Developer Guide | [docs/SCK-915_Developer_Guide.md](docs/SCK-915_Developer_Guide.md) |
+| SCK-2400 User Guide | [docs/SCK-2400_User_Guide.md](docs/SCK-2400_User_Guide.md) |
+| SCK-2400 Developer Guide | [docs/SCK-2400_Developer_Guide.md](docs/SCK-2400_Developer_Guide.md) |
+| SCK-2400 Dev Log / Bringup Notes | [docs/dev-log/](docs/dev-log/) |
 | OpenLST Hardware (forked) | https://github.com/eor123/openlst |
 | Original OpenLST by Planet Labs | https://github.com/OpenLST/openlst |
 | SpaceCommsKit Website | https://www.spacecommskit.com |
@@ -481,11 +674,26 @@ via Section 7.
 | SPOT Trace Tracker | https://www.findmespot.com |
 | SDCC Compiler | https://sdcc.sourceforge.net |
 | SmartRF Flash Programmer | https://www.ti.com/tool/FLASH-PROGRAMMER |
+| TI Code Composer Studio (Theia) | https://www.ti.com/tool/CCSTUDIO |
 | Inno Setup 6 | https://jrsoftware.org/isinfo.php |
 
 ---
 
 ## Changelog
+
+### v1.3.0 (in progress)
+- **SCK-2400 platform added** — CC1352P (LAUNCHXL-CC1352P-2), CCSDS Space Packet Protocol
+- OAD (Over-Air Download) streaming — full 335KB firmware image in ~24 seconds (10ms
+  inter-chunk delay), ~5% of an 8-minute LEO pass
+- BIM (Boot Image Manager) — failed/interrupted OAD never bricks the board; previous
+  working firmware always remains bootable
+- CCSDS↔ESP payload bridge — SCK-PBL-1 Pico payload board (`main.py`) works unchanged
+  on SCK-2400; CC1352P transparently translates CCSDS commands to ESP framing
+- Ground Station: Board dropdown to switch between SCK-915 (OpenLST) and SCK-2400 (CCSDS)
+- Ground Station: OAD controls on Commands tab (Start/Status/Abort, inter-chunk delay)
+- Ground Station: SCK-2400 custom commands now route through `CcsdsProtocol.BuildCommand`
+- New SCK-2400 User Guide and Developer Guide; SCK-915 User Guide converted to Markdown
+- Dev log added — bringup session notes and hard-won lessons for SCK-2400
 
 ### v1.2.0
 - **Rebranded: SCK Ground Station** (formerly OpenLST Ground Station)
