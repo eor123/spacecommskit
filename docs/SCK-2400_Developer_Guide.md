@@ -72,8 +72,19 @@ talking to a CC1110 (SCK-915) or a CC1352P (SCK-2400).
 | Board | Description | Status |
 |-------|-------------|--------|
 | LAUNCHXL-CC1352P-2 ×2 | TI LaunchPad development boards | Dev/test — current bringup hardware |
-| SCK-2400 (production) | CC2652P1FRGZ custom PCB | Planned |
+| SCK-2400 Dev (production) | CC2652P1FRGZ, SCK-915 footprint — drop-in for existing 3D-printed stands and SCK-PBL-1 | Planned — design largely complete |
+| SCK-2400 CubeSat (production) | CC2652P1FRGZ, RF sections only, PC-104 compliant | Planned — design largely complete |
 | SCK-PBL-1 Payload | Pico + camera + GPS + altimeter + SD PCB | Shared with SCK-915 |
+
+> Both production variants share identical firmware to what's being bringup-tested
+> on LAUNCHXL-CC1352P-2 in this guide — the CC1352P and CC2652P are
+> pin/peripheral-compatible within the SimpleLink family, so the CCSDS dispatch,
+> OAD transport, and payload bridge code carries forward unchanged. The
+> **SCK-2400 Dev variant** is a footprint-compatible drop-in replacement for
+> SCK-915 — same mounting, same payload board connector — intended for
+> development work and HAB missions. The **SCK-2400 CubeSat variant** strips the
+> board to RF sections only on a PC-104 compliant form factor, for integration
+> into real CubeSat flight stacks.
 
 ### 1.3 Firmware Components
 
@@ -696,11 +707,6 @@ shared). Each one cost real debugging time.
 | L14 | The Ground Station's HEX File path does not always follow Project Dir changes — verify before flashing to a custom build location | Medium |
 | L15 | BIM is permanent and never updated by application builds or OAD — a corrupted OAD image is simply never copied, and the board boots the last good internal-flash image | High (safety property) |
 | L16 | Always Clean + Build after modifying `ccsds.h`, `uart.h`, or `.syscfg` — incremental builds can silently link stale generated headers | High |
-
-> **Full bringup notes for these sessions** — including the dead-ends,
-> the SysConfig surprises, and the order we actually discovered these
-> lessons in — are in the
-> [dev log: OAD Streaming & CCSDS↔ESP Payload Bridge](./dev-log/SCK-2400_Session10-11_OAD_PayloadBridge.md).
 
 ---
 
