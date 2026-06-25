@@ -1,0 +1,146 @@
+/**
+ * These arguments were used when this file was generated. They will be automatically applied on subsequent loads
+ * via the GUI or CLI. Run CLI with '--help' for additional information on how to override these arguments.
+ * @cliArgs --board "/ti/boards/CC1352P_2_LAUNCHXL" --device "CC1352P1F3RGZ" --part "Default" --package "RGZ" --rtos "tirtos7" --product "simplelink_cc13xx_cc26xx_sdk@8.32.00.07"
+ * @v2CliArgs --device "CC1352P" --package "VQFN (RGZ)" --board "/ti/boards/CC1352P_2_LAUNCHXL" --rtos "tirtos7" --product "simplelink_cc13xx_cc26xx_sdk@8.32.00.07"
+ * @versions {"tool":"1.21.1+3772"}
+ */
+
+/**
+ * Import the modules used in this configuration.
+ */
+const CCFG        = scripting.addModule("/ti/devices/CCFG");
+const custom      = scripting.addModule("/ti/devices/radioconfig/custom");
+const rfdesign    = scripting.addModule("/ti/devices/radioconfig/rfdesign");
+const GPIO        = scripting.addModule("/ti/drivers/GPIO");
+const GPIO1       = GPIO.addInstance();
+const GPIO2       = GPIO.addInstance();
+const GPIO3       = GPIO.addInstance();
+const Power       = scripting.addModule("/ti/drivers/Power");
+const SPI         = scripting.addModule("/ti/drivers/SPI", {}, false);
+const SPI1        = SPI.addInstance();
+const SPI2        = SPI.addInstance();
+const UART2       = scripting.addModule("/ti/drivers/UART2", {}, false);
+const UART21      = UART2.addInstance();
+const UART22      = UART2.addInstance();
+const Watchdog    = scripting.addModule("/ti/drivers/Watchdog", {}, false);
+const Watchdog1   = Watchdog.addInstance();
+const Settings    = scripting.addModule("/ti/posix/tirtos/Settings");
+const BIOS        = scripting.addModule("/ti/sysbios/BIOS");
+const Clock       = scripting.addModule("/ti/sysbios/knl/Clock");
+const Event       = scripting.addModule("/ti/sysbios/knl/Event");
+const Idle        = scripting.addModule("/ti/sysbios/knl/Idle", {}, false);
+const Idle2       = Idle.addInstance();
+const Mailbox     = scripting.addModule("/ti/sysbios/knl/Mailbox");
+const Error       = scripting.addModule("/ti/sysbios/runtime/Error");
+const SysCallback = scripting.addModule("/ti/sysbios/runtime/SysCallback");
+const Timestamp   = scripting.addModule("/ti/sysbios/runtime/Timestamp");
+
+/**
+ * Write custom configuration values to the imported modules.
+ */
+CCFG.enableBootloader        = true;
+CCFG.levelBootloaderBackdoor = "Active low";
+CCFG.dioBootloaderBackdoor   = 16;
+CCFG.ccfgTemplate.$name      = "ti_devices_CCFG_CCFGCC26XXTemplate0";
+
+custom.prop2                                             = ["2gfsk250kbps"];
+custom.radioConfig2gfsk250kbps.$name                     = "ti_devices_radioconfig_settings_prop0";
+custom.radioConfig2gfsk250kbps.codeExportConfig.$name    = "ti_devices_radioconfig_code_export_param0";
+custom.radioConfig2gfsk250kbps.codeExportConfig.paExport = "dual";
+
+rfdesign.rfDesign = "LAUNCHXL-CC1352P-2";
+
+GPIO1.$name           = "RF_SW_2G4";
+GPIO1.mode            = "Output";
+GPIO1.gpioPin.$assign = "DIO_28";
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to SKY13317-373LF RF Antenna Switch on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", GPIO1, "gpioPin");
+
+GPIO2.$name           = "RF_SW_PA";
+GPIO2.mode            = "Output";
+GPIO2.gpioPin.$assign = "DIO_29";
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to SKY13317-373LF RF Antenna Switch on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", GPIO2, "gpioPin");
+
+GPIO3.$name     = "CONFIG_GPIO_GLED";
+GPIO3.mode      = "Output";
+GPIO3.$hardware = system.deviceData.board.components.LED_GREEN;
+
+const RF = scripting.addModule("/ti/drivers/RF", {}, false);
+scripting.suppress("The board \'CC1352P-2 LaunchPad\' requires the \'RF Antenna Switch\' to be selected\\.", RF, "$hardware");
+
+SPI1.$name               = "CONFIG_SPI_0";
+SPI1.mode                = "Four Pin CS Active Low";
+SPI1.spi.$assign         = "SSI0";
+SPI1.spi.sclkPin.$assign = "boosterpack.7";
+SPI1.spi.pociPin.$assign = "boosterpack.14";
+SPI1.spi.picoPin.$assign = "boosterpack.15";
+SPI1.spi.csnPin.$assign  = "boosterpack.38";
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to LaunchPad SPI Bus on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", SPI1.spi, "sclkPin");
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to LaunchPad SPI Bus on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", SPI1.spi, "picoPin");
+
+SPI2.$name               = "CONFIG_SPI_1";
+SPI2.mode                = "Four Pin CS Active Low";
+SPI2.spi.$assign         = "SSI1";
+SPI2.spi.sclkPin.$assign = "boosterpack.2";
+SPI2.spi.pociPin.$assign = "boosterpack.23";
+SPI2.spi.picoPin.$assign = "boosterpack.6";
+SPI2.spi.csnPin.$assign  = "boosterpack.24";
+
+UART21.$name              = "PAYLOAD_UART";
+UART21.enableNonblocking  = false;
+UART21.uart.txPin.$assign = "boosterpack.4";
+UART21.uart.rxPin.$assign = "boosterpack.3";
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to XDS110 UART on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", UART21.uart, "txPin");
+scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to XDS110 UART on the CC1352P-2 LaunchPad\\. Consider selecting it in \'use hardware\' above\\. @@@.+?@@@", UART21.uart, "rxPin");
+
+UART22.$name              = "DEBUG_UART";
+UART22.uart.txPin.$assign = "boosterpack.10";
+UART22.uart.rxPin.$assign = "boosterpack.32";
+
+Watchdog1.$name  = "CONFIG_WATCHDOG_0";
+Watchdog1.period = 30000;
+
+BIOS.assertsEnabled = false;
+BIOS.heapBaseAddr   = "__primary_heap_start__";
+BIOS.heapEndAddr    = "__primary_heap_end__";
+
+const Timer = scripting.addModule("/ti/sysbios/family/arm/cc26xx/Timer", {}, false);
+
+Idle2.$name   = "powerIdle";
+Idle2.idleFxn = "Power_idleFunc";
+
+const Semaphore            = scripting.addModule("/ti/sysbios/knl/Semaphore", {}, false);
+Semaphore.supportsPriority = false;
+
+const Swi         = scripting.addModule("/ti/sysbios/knl/Swi", {}, false);
+Swi.numPriorities = 6;
+
+const Task             = scripting.addModule("/ti/sysbios/knl/Task", {}, false);
+Task.checkStackFlag    = false;
+Task.defaultStackSize  = 512;
+Task.idleTaskStackSize = 512;
+Task.numPriorities     = 6;
+
+Error.policy       = "Error_SPIN";
+Error.printDetails = false;
+
+const System           = scripting.addModule("/ti/sysbios/runtime/System", {}, false);
+System.abortFxn        = "System_abortSpin";
+System.exitFxn         = "System_exitSpin";
+System.extendedFormats = "%f";
+System.supportModule   = "SysCallback";
+
+/**
+ * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
+ * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
+ * re-solve from scratch.
+ */
+GPIO3.gpioPin.$suggestSolution         = "boosterpack.40";
+SPI1.spi.dmaRxChannel.$suggestSolution = "DMA_CH3";
+SPI1.spi.dmaTxChannel.$suggestSolution = "DMA_CH4";
+SPI2.spi.dmaRxChannel.$suggestSolution = "DMA_CH16";
+SPI2.spi.dmaTxChannel.$suggestSolution = "DMA_CH17";
+UART21.uart.$suggestSolution           = "UART1";
+UART22.uart.$suggestSolution           = "UART0";
+Watchdog1.watchdog.$suggestSolution    = "WDT0";
+Timer.rtc.$suggestSolution             = "RTC0";

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?fileVersion 4.0.0?>
+<cproject storage_type_id="org.eclipse.cdt.core.XmlProjectDescriptionStorage">
+	<storageModule moduleId="org.eclipse.cdt.core.settings">
+		<cconfiguration id="com.ti.ccstudio.buildDefinitions.TIClang.Debug.1">
+			<storageModule buildSystemId="org.eclipse.cdt.managedbuilder.core.configurationDataProvider" id="com.ti.ccstudio.buildDefinitions.TIClang.Debug.1" moduleId="org.eclipse.cdt.core.settings" name="Debug">
+				<externalSettings/>
+				<extensions>
+					<extension id="com.ti.ccstudio.binaryparser.CoffParser" point="org.eclipse.cdt.core.BinaryParser"/>
+					<extension id="org.eclipse.cdt.core.GmakeErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="org.eclipse.cdt.core.CWDLocator" point="org.eclipse.cdt.core.ErrorParser"/>
+					<extension id="com.ti.ccstudio.errorparser.CoffErrorParser" point="org.eclipse.cdt.core.ErrorParser"/>
+				</extensions>
+			</storageModule>
+			<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+				<configuration artifactExtension="out" artifactName="${ProjName}" buildArtefactType="com.ti.ccstudio.buildDefinitions.core.exe" buildProperties="org.eclipse.cdt.build.core.buildArtefactType=com.ti.ccstudio.buildDefinitions.core.exe" cleanCommand="${RMDIR} ${ProjName}.out ${ProjName}.map" description="" id="com.ti.ccstudio.buildDefinitions.TIClang.Debug.1" name="Debug" parent="com.ti.ccstudio.buildDefinitions.TIClang.Debug">
+					<folderInfo id="com.ti.ccstudio.buildDefinitions.TIClang.Debug.1.." name="/" resourcePath="">
+						<toolChain id="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugToolchain.1" name="TI LLVM Compiler" superClass="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugToolchain" targetTool="com.ti.ccstudio.buildDefinitions.TIClang.exe.linker.1">
+							<option id="com.ti.ccstudio.buildDefinitions.core.OPT_TAGS.1" name="Tags" superClass="com.ti.ccstudio.buildDefinitions.core.OPT_TAGS" valueType="stringList">
+								<listOptionValue builtIn="false" value="com.ti.ccstudio.core.deviceName=CC1352P1F3RGZ"/>
+								<listOptionValue builtIn="false" value="com.ti.ccstudio.core.endianness=little"/>
+								<listOptionValue builtIn="false" value="com.ti.ccstudio.core.outputFormat=ELF"/>
+								<listOptionValue builtIn="false" value="com.ti.ccstudio.core.rts=libc.a"/>
+							</option>
+							<targetPlatform id="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugTargetPlatform.1" name="Platform" superClass="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugTargetPlatform">
+								<debugServerConfiguration id="com.ti.ccstudio.XDS110.1" name="XDS110" superClass="com.ti.ccstudio.XDS110"/>
+							</targetPlatform>
+							<builder buildPath="${BuildDirectory}" id="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugBuilder.1" name="GNU Make.Debug" superClass="com.ti.ccstudio.buildDefinitions.TIClang.exe.DebugBuilder"/>
+							<tool id="com.ti.ccstudio.buildDefinitions.TIClang.exe.compiler.1" name="TI LLVM Compiler" superClass="com.ti.ccstudio.buildDefinitions.TIClang.exe.compiler">
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.OPT_LEVEL.1" name="Optimization Level" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.OPT_LEVEL" value="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.OPT_LEVEL.Os" valueType="enumerated"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.INCLUDE_PATH.1" name="Include Path" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.INCLUDE_PATH" valueType="includePath">
+									<listOptionValue builtIn="false" value="${COM_TI_SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source"/>
+									<listOptionValue builtIn="false" value="${COM_TI_SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/posix/ticlang"/>
+									<listOptionValue builtIn="false" value="${COM_TI_SIMPLELINK_CC13XX_CC26XX_SDK_INSTALL_DIR}/source/ti/common/flash/no_rtos/extFlash"/>
+								</option>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.DEFINES.1" name="Predefined Symbols" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.DEFINES" valueType="definedSymbols">
+									<listOptionValue builtIn="false" value="DeviceFamily_CC13X2"/>
+									<listOptionValue builtIn="false" value="BIM_OFFCHIP"/>
+									<listOptionValue builtIn="false" value="MCUBOOT_DISABLE_LOGGING"/>
+								</option>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.TARGET_CPU.1" name="Target CPU" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.TARGET_CPU" value="cortex-m4" valueType="string"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FLOAT_ABI.1" name="Float ABI" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FLOAT_ABI" value="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FLOAT_ABI.hard" valueType="enumerated"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FPU_VERSION.1" name="FPU Version" superClass="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FPU_VERSION" value="com.ti.ccstudio.buildDefinitions.TIClang.compilerID.FPU_VERSION.fpv4-sp-d16" valueType="enumerated"/>
+							</tool>
+							<tool id="com.ti.ccstudio.buildDefinitions.TIClang.exe.linker.1" name="TI LLVM Linker" superClass="com.ti.ccstudio.buildDefinitions.TIClang.exe.linker">
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.MAP_FILE.1" name="Map File" superClass="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.MAP_FILE" value="${ProjName}.map" valueType="string"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.COMMAND_FILE.1" name="Linker Command File" superClass="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.COMMAND_FILE" value="../sck2400_bim.cmd" valueType="string"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.OUTPUT_FORMAT.1" name="Output Format" superClass="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.OUTPUT_FORMAT" value="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.OUTPUT_FORMAT.ELF" valueType="enumerated"/>
+								<option id="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.LIBRARY.1" name="Runtime Library" superClass="com.ti.ccstudio.buildDefinitions.TIClang.linkerID.LIBRARY" valueType="libs">
+									<listOptionValue builtIn="false" value="libc.a"/>
+								</option>
+							</tool>
+						</toolChain>
+					</folderInfo>
+				</configuration>
+			</storageModule>
+			<storageModule moduleId="org.eclipse.cdt.core.externalSettings"/>
+		</cconfiguration>
+	</storageModule>
+	<storageModule moduleId="cdtBuildSystem" version="4.0.0">
+		<project id="sck2400_bim.com.ti.ccstudio.buildDefinitions.TIClang.exe.1" name="TI LLVM Compiler" projectType="com.ti.ccstudio.buildDefinitions.TIClang.exe"/>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.core.LanguageSettingsProviders"/>
+	<storageModule moduleId="refreshScope" versionNumber="2">
+		<configuration configurationName="Debug">
+			<resource resourceType="PROJECT" workspacePath="/sck2400_bim"/>
+		</configuration>
+	</storageModule>
+	<storageModule moduleId="com.ti.ccstudio.core.ccsModule">
+		<property name="CC_XML_VERSION" value="1.1.0.0"/>
+		<property name="id" value="com.ti.ccstudio.core.ccsModule"/>
+		<property name="isTheia" value="true"/>
+	</storageModule>
+	<storageModule moduleId="scannerConfiguration"/>
+</cproject>
