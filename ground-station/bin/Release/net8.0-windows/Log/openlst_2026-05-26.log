@@ -1,0 +1,52 @@
+10:12:13.058  SCK Ground Station ready.
+10:12:15.095  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Log
+10:12:15.098  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Flights
+10:12:26.709  Connected: COM9 @ 921600
+10:12:31.179    → TX [0001]  get_telem  (seq=17)
+10:12:36.372    ✗ No telem reply
+10:12:41.536  Serial port closed.
+10:12:46.390  Connected: COM8 @ 921600
+10:12:48.101    → TX [0001]  get_telem  (seq=18)
+10:12:53.155    ✗ No telem reply
+10:13:05.454  Board: SCK-2400 (CCSDS)
+10:13:11.813    → TX [0000]  [CCSDS] get_telem seq=2
+10:13:16.889    ✗ No telem reply
+10:13:21.277    → TX [0000]  [CCSDS] get_telem seq=3
+10:13:21.509    ← RX  [CCSDS RAW] 08 01 C0 03 00 1F 03 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A4 04 9A 0C
+10:13:21.512    ← RX  tlm_beacon  apid=0x001 seq=3
+10:13:21.521    ✓ tlm_beacon received seq=3
+10:54:25.605  SCK Ground Station ready.
+10:54:25.624  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Log
+10:54:25.631  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Flights
+10:54:36.582  Board: SCK-2400 (CCSDS)
+10:54:46.858  Connected: COM12 @ 921600
+11:02:17.201  COM ports refreshed. 4 port(s) found.
+11:02:29.350  SCK Ground Station ready.
+11:02:29.378  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Log
+11:02:29.380  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Flights
+11:02:38.940  Board: SCK-2400 (CCSDS)
+11:02:44.646  Connected: COM12 @ 921600
+11:03:46.905    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x010
+11:03:52.448    ✗ No telem reply
+11:03:58.846    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x010
+11:04:04.049    ✗ No telem reply
+11:04:12.646    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x001
+11:04:17.815    ✗ No telem reply
+11:04:23.749    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x001
+11:04:28.948    ✗ No telem reply
+11:04:32.837  Serial port closed.
+11:04:40.863  Connected: COM11 @ 921600
+11:04:46.295  Serial port closed.
+11:04:48.825  Connected: COM12 @ 921600
+11:04:53.005    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x010
+11:04:58.132    ✗ No telem reply
+11:08:42.008  Serial port closed.
+11:08:45.417  Connected: COM12 @ 921600
+11:08:51.637    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x010
+11:08:51.673    ← RX  [CCSDS RAW] 08 01 C0 07 00 1F 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A9 04 BC 0C
+11:08:51.676    ← RX  tlm_beacon  apid=0x001 seq=7
+11:08:51.695    ✓ tlm_beacon received seq=7
+11:09:37.386    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x011
+11:09:37.411    ← RX  [CCSDS RAW] 08 01 C0 08 00 1F 46 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0E 00 00 00 00 00 00 00 00 00 AA 04 BD 0C
+11:09:37.415    ← RX  tlm_beacon  apid=0x001 seq=8
+11:09:37.416    ✓ tlm_beacon received seq=8

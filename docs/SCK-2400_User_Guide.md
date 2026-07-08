@@ -1,6 +1,6 @@
 # SpaceCommsKit SCK-2400 — Ground Station User Guide
 
-**Version 1.00 — June 2026**
+**Version 1.10 — July 2026**
 **SpaceCommsKit — https://spacecommskit.com**
 
 ---
@@ -44,7 +44,7 @@ With the SCK-2400 Ground Station you can:
 | Raspberry Pi Pico payload board | Runs GPS, altimeter, camera, and SD logging (optional but recommended) |
 | SCK Ground Station software | Windows application for commanding and monitoring |
 
-The development hardware is two TI **LAUNCHXL-CC1352P-2** LaunchPads.
+The development hardware is **SCK-2400 Mini** boards (two units — one Ground Station, one Remote).
 Production hardware is the SCK-2400 custom PCB using the CC2652P.
 
 ---
@@ -328,5 +328,5 @@ is never overwritten by subsequent application or OAD updates.
 
 ---
 
-*SpaceCommsKit SCK-2400 User Guide v1.00*
+*SpaceCommsKit SCK-2400 User Guide v1.10*
 *For updates and source code see https://spacecommskit.com*

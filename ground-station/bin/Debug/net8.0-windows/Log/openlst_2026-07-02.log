@@ -1,0 +1,1127 @@
+05:52:03.041  SCK Ground Station ready.
+05:52:03.748  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+05:52:03.750  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+05:52:30.634  SCK Ground Station ready.
+05:52:30.664  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+05:52:30.667  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+05:52:44.552  COM ports refreshed. 2 port(s) found.
+05:52:52.657  Board: SCK-2400 (CCSDS)
+05:59:13.347  SCK Ground Station ready.
+05:59:13.368  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+05:59:13.369  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+05:59:52.088  Board: SCK-2400 (CCSDS)
+05:59:59.207  Board: SCK-915 (OpenLST)
+06:00:01.144  Board: SCK-2400 (CCSDS)
+06:20:51.206  SCK Ground Station ready.
+06:20:51.229  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:20:51.231  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:23:04.901  SCK Ground Station ready.
+06:23:04.922  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:23:04.924  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:23:11.428  Connected: COM12 @ 921600
+06:23:40.942  SCK Ground Station ready.
+06:23:40.964  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:23:40.965  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:23:44.718  Connected: COM12 @ 921600
+06:23:58.284  Board: SCK-2400 (CCSDS)
+06:26:12.521  Serial port closed.
+06:26:12.528  Connected: COM12 @ 921600
+06:26:12.531  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:26:20.415  Serial port closed.
+06:26:20.422  Connected: COM12 @ 921600
+06:26:20.426  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+06:26:33.227  RF Power: patched radio.h → TX_POWER = BENCH (0 dBm bench)
+06:26:33.249  Board: patched ccsds.h → SCK_APID_THIS_BOARD = 0x010 (GS Board  (APID 0x010))
+06:26:33.412  security.h: patched with production keys from Provision tab
+06:26:33.413    Key 0: 6140b35e...56f92a4d
+06:26:33.414    Key 1: 604a1517...a46cba4a
+06:26:33.415    Key 2: 9b52e05f...42a4856a
+06:26:33.481  ══════════════════════════════════════════════════
+06:26:33.558    SCK-2400 Build  →  GS Board  (APID 0x010)
+06:26:33.559    SCK_APID_THIS_BOARD = 0x010
+06:26:33.560    Build type: full
+06:26:33.561  ══════════════════════════════════════════════════
+06:27:11.665  # ================================================================================
+06:27:11.836  # [Thu Jul 02 06:27:11 CDT 2026]: CCS headless build starting...
+06:27:16.114  **** Clean-only build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:27:16.246  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 clean -r -O
+06:27:17.538  DEL /F "syscfg\ti_radio_config.h" "syscfg\ti_drivers_config.h" "syscfg\ti_utils_build_linker.cmd.genlibs" "syscfg\ti_utils_build_linker.cmd.genmap" "syscfg\syscfg_c.rov.xs" "syscfg\ti_sysbios_config.h" "syscfg\ti_devices_config.c" "syscfg\ti_radio_config.c" "syscfg\ti_drivers_config.c" "syscfg\ti_utils_build_compiler.opt" "syscfg\ti_sysbios_config.c" "sck2400_firmware.out"
+06:27:17.541  DEL /F "RFQueue.o" "ccsds.o" "crypto.o" "main.o" "main_tirtos.o" "nv_storage.o" "oad_flash_stub.o" "oad_image_header_app.o" "oad_task.o" "radio.o" "syscfg\ti_devices_config.o" "syscfg\ti_radio_config.o" "syscfg\ti_drivers_config.o" "syscfg\ti_sysbios_config.o" "telemetry.o" "uart.o"
+06:27:17.550  DEL /F "RFQueue.d" "ccsds.d" "crypto.d" "main.d" "main_tirtos.d" "nv_storage.d" "oad_flash_stub.d" "oad_image_header_app.d" "oad_task.d" "radio.d" "syscfg\ti_devices_config.d" "syscfg\ti_radio_config.d" "syscfg\ti_drivers_config.d" "syscfg\ti_sysbios_config.d" "telemetry.d" "uart.d"
+06:27:17.553  RMDIR /S/Q "syscfg"
+06:27:17.733  **** Build finished ****
+06:27:37.790  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:27:37.800  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:27:47.419  SysConfig - building file: "../sck2400.syscfg"
+06:27:47.423  "C:/ti/sysconfig_1.21.1/sysconfig_cli.bat" -s "C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/.metadata/product.json" --script "C:/Users/maxor/workspace_ccstheia/sck2400_firmware/sck2400.syscfg" -o "syscfg" --compiler ticlang
+06:27:47.429  Running script...
+06:27:47.432  Validating...
+06:27:47.436  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin: Connected to hardware
+06:27:47.438  DIO8/14 is connected to LaunchPad SPI Bus on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:27:47.443  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin: Connected to hardware
+06:27:47.445  DIO20/38 is connected to MX25R8035F SPI Flash Chip Select on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:27:47.448  0 error(s), 2 warning(s)
+06:27:47.450  Generating Code (sck2400.syscfg)...
+06:27:47.453  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_devices_config.c...
+06:27:47.455  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.c...
+06:27:47.459  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.h...
+06:27:47.462  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.c...
+06:27:47.464  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.h...
+06:27:47.467  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genlibs...
+06:27:47.469  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genmap...
+06:27:47.473  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_compiler.opt...
+06:27:47.476  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\syscfg_c.rov.xs...
+06:27:47.479  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.h...
+06:27:47.482  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.c...
+06:27:47.484  Finished building: "../sck2400.syscfg"
+06:28:01.879  Arm Compiler - building file: "../oad_image_header_app.c"
+06:28:01.884  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:28:01.889  Finished building: "../oad_image_header_app.c"
+06:28:01.907  Arm Compiler - building file: "syscfg/ti_devices_config.c"
+06:28:01.911  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_devices_config.d_raw" -MT"syscfg/ti_devices_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_devices_config.o" "syscfg/ti_devices_config.c"
+06:28:01.915  Finished building: "syscfg/ti_devices_config.c"
+06:28:02.456  Arm Compiler - building file: "../RFQueue.c"
+06:28:02.555  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"RFQueue.d_raw" -MT"RFQueue.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"RFQueue.o" "../RFQueue.c"
+06:28:02.561  Finished building: "../RFQueue.c"
+06:28:02.564  Arm Compiler - building file: "../ccsds.c"
+06:28:02.567  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"ccsds.d_raw" -MT"ccsds.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"ccsds.o" "../ccsds.c"
+06:28:02.570  Finished building: "../ccsds.c"
+06:28:02.574  Arm Compiler - building file: "../oad_task.c"
+06:28:02.577  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_task.d_raw" -MT"oad_task.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_task.o" "../oad_task.c"
+06:28:02.659  Finished building: "../oad_task.c"
+06:28:02.860  Arm Compiler - building file: "syscfg/ti_radio_config.c"
+06:28:02.865  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_radio_config.d_raw" -MT"syscfg/ti_radio_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_radio_config.o" "syscfg/ti_radio_config.c"
+06:28:02.868  Finished building: "syscfg/ti_radio_config.c"
+06:28:02.872  Arm Compiler - building file: "../crypto.c"
+06:28:02.875  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"crypto.d_raw" -MT"crypto.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"crypto.o" "../crypto.c"
+06:28:02.880  Finished building: "../crypto.c"
+06:28:02.884  Arm Compiler - building file: "../main_tirtos.c"
+06:28:02.886  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main_tirtos.d_raw" -MT"main_tirtos.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main_tirtos.o" "../main_tirtos.c"
+06:28:02.890  Finished building: "../main_tirtos.c"
+06:28:03.724  Arm Compiler - building file: "../oad_flash_stub.c"
+06:28:03.727  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_flash_stub.d_raw" -MT"oad_flash_stub.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_flash_stub.o" "../oad_flash_stub.c"
+06:28:03.730  Finished building: "../oad_flash_stub.c"
+06:28:04.102  Arm Compiler - building file: "../radio.c"
+06:28:04.110  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"radio.d_raw" -MT"radio.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"radio.o" "../radio.c"
+06:28:04.113  Finished building: "../radio.c"
+06:28:05.379  Arm Compiler - building file: "../nv_storage.c"
+06:28:05.382  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"nv_storage.d_raw" -MT"nv_storage.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"nv_storage.o" "../nv_storage.c"
+06:28:05.388  Finished building: "../nv_storage.c"
+06:28:05.476  Arm Compiler - building file: "../telemetry.c"
+06:28:05.480  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"telemetry.d_raw" -MT"telemetry.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"telemetry.o" "../telemetry.c"
+06:28:05.484  Finished building: "../telemetry.c"
+06:28:05.493  Arm Compiler - building file: "../main.c"
+06:28:05.497  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main.d_raw" -MT"main.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main.o" "../main.c"
+06:28:05.500  Finished building: "../main.c"
+06:28:05.907  Arm Compiler - building file: "../uart.c"
+06:28:05.910  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"uart.d_raw" -MT"uart.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"uart.o" "../uart.c"
+06:28:05.914  Finished building: "../uart.c"
+06:28:06.242  Arm Compiler - building file: "syscfg/ti_drivers_config.c"
+06:28:06.245  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_drivers_config.d_raw" -MT"syscfg/ti_drivers_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_drivers_config.o" "syscfg/ti_drivers_config.c"
+06:28:06.248  Finished building: "syscfg/ti_drivers_config.c"
+06:28:16.052  Arm Compiler - building file: "syscfg/ti_sysbios_config.c"
+06:28:16.056  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_sysbios_config.d_raw" -MT"syscfg/ti_sysbios_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_sysbios_config.o" "syscfg/ti_sysbios_config.c"
+06:28:16.061  Finished building: "syscfg/ti_sysbios_config.c"
+06:28:16.162  Arm Linker - building target: "sck2400_firmware.out"
+06:28:16.166  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:28:19.372  Finished building target: "sck2400_firmware.out"
+06:28:19.423  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:28:20.235  Translating to Intel format...
+06:28:20.239  "sck2400_firmware.out" .image_header ==> .image_header
+06:28:20.242  "sck2400_firmware.out" .text ==> .text
+06:28:20.245  "sck2400_firmware.out" .rodata ==> .rodata
+06:28:20.249  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:28:20.252  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:28:20.256  "sck2400_firmware.out" .args ==> .args
+06:28:20.259  "sck2400_firmware.out" .cinit ==> .cinit
+06:28:20.262  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:28:20.329  **** Build finished ****
+06:28:20.574  # ----------------------------------------
+06:28:20.578  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:28:20.594  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:28:20.597  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:28:20.601  # --------------------------------------------------------------------------------
+06:28:20.604  # [Thu Jul 02 06:28:20 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:28:24.194  ✓ Build succeeded: C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\sck2400_firmware.hex
+06:28:24.200    Board: GS Board  (APID 0x010)  APID: 0x010
+06:28:24.205  OAD patch: reading oad_entry_vec address from map file...
+06:28:24.208  OAD patch: oad_entry_vec at 0x0000E620 (summary table)
+06:28:24.212  OAD patch: computed image len = 0x0004E000 (end=0x00052000)
+06:28:24.216  OAD patch: .prgEntry already 0x0000E620 or pattern not found.
+06:28:24.219  OAD patch: .len already 0x0004E000 or pattern not found.
+06:28:24.223  OAD patch: deleted stale oad_image_header_app.o
+06:28:24.225  OAD patch: incremental rebuild to bake prgEntry...
+06:28:27.460  # ================================================================================
+06:28:27.464  # [Thu Jul 02 06:28:27 CDT 2026]: CCS headless build starting...
+06:28:30.034  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:28:30.061  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:28:30.311  Arm Compiler - building file: "../oad_image_header_app.c"
+06:28:30.315  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:28:30.318  Finished building: "../oad_image_header_app.c"
+06:28:30.365  Arm Linker - building target: "sck2400_firmware.out"
+06:28:30.369  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:28:31.080  Finished building target: "sck2400_firmware.out"
+06:28:31.224  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:28:31.395  Translating to Intel format...
+06:28:31.398  "sck2400_firmware.out" .image_header ==> .image_header
+06:28:31.401  "sck2400_firmware.out" .text ==> .text
+06:28:31.404  "sck2400_firmware.out" .rodata ==> .rodata
+06:28:31.407  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:28:31.409  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:28:31.412  "sck2400_firmware.out" .args ==> .args
+06:28:31.415  "sck2400_firmware.out" .cinit ==> .cinit
+06:28:31.418  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:28:31.510  **** Build finished ****
+06:28:31.542  # ----------------------------------------
+06:28:31.546  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:28:31.550  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:28:31.554  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:28:31.558  # --------------------------------------------------------------------------------
+06:28:31.562  # [Thu Jul 02 06:28:31 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:28:32.150  OAD patch: rebuild OK — prgEntry = 0x0000E620
+06:28:46.327  XDS110 detected: Serial = L4300491
+06:28:46.981  ✓ Merged BIM + firmware → C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:28:47.006  ══════════════════════════════════════════════════
+06:28:47.009    SCK-2400 Local Flash  →  GS Board  (APID 0x010)
+06:28:47.012    XDS110: L4300491
+06:28:47.015    HEX: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:28:47.024  ══════════════════════════════════════════════════
+06:28:47.027  srfprog -t soc(XDS-L4300491, CC1352P) -e all -p all -v rb -f "C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex"
+06:28:56.603  Texas Instruments SmartRF Flash Programmer 2 v1.8.2-windows
+06:28:56.605  -------------------------------------------------------------------------------
+06:28:56.608  Connected over 2-pin cJTAG.
+06:28:56.611  Reading file: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex.
+06:28:56.613  Start flash erase ...
+06:28:56.616  OK
+06:28:56.619  Start flash programming ...
+06:28:56.622  0%0%4%9%13%93%99%100%
+06:28:56.625  OK
+06:28:56.628  Start flash verify ...
+06:28:56.631  0%0%
+06:28:56.633  Page: 0 verified OK.2%
+06:28:56.636  Skip verification of unassigned page: 1.4%
+06:28:56.639  Page: 2 verified OK.6%
+06:28:56.642  Page: 3 verified OK.9%
+06:28:56.645  Page: 4 verified OK.11%
+06:28:56.649  Page: 5 verified OK.13%
+06:28:56.652  Page: 6 verified OK.15%
+06:28:56.655  Page: 7 verified OK.18%
+06:28:56.659  Skip verification of unassigned page: 8.20%
+06:28:56.661  Skip verification of unassigned page: 9.22%
+06:28:56.664  Skip verification of unassigned page: 10.25%
+06:28:56.675  Skip verification of unassigned page: 11.27%
+06:28:56.677  Skip verification of unassigned page: 12.29%
+06:28:56.680  Skip verification of unassigned page: 13.31%
+06:28:56.683  Skip verification of unassigned page: 14.34%
+06:28:56.686  Skip verification of unassigned page: 15.36%
+06:28:56.689  Skip verification of unassigned page: 16.38%
+06:28:56.692  Skip verification of unassigned page: 17.40%
+06:28:56.695  Skip verification of unassigned page: 18.43%
+06:28:56.698  Skip verification of unassigned page: 19.45%
+06:28:56.700  Skip verification of unassigned page: 20.47%
+06:28:56.703  Skip verification of unassigned page: 21.50%
+06:28:56.706  Skip verification of unassigned page: 22.52%
+06:28:56.709  Skip verification of unassigned page: 23.54%
+06:28:56.712  Skip verification of unassigned page: 24.56%
+06:28:56.715  Skip verification of unassigned page: 25.59%
+06:28:56.717  Skip verification of unassigned page: 26.61%
+06:28:56.720  Skip verification of unassigned page: 27.63%
+06:28:56.725  Skip verification of unassigned page: 28.65%
+06:28:56.727  Skip verification of unassigned page: 29.68%
+06:28:56.730  Skip verification of unassigned page: 30.70%
+06:28:56.733  Skip verification of unassigned page: 31.72%
+06:28:56.735  Skip verification of unassigned page: 32.75%
+06:28:56.738  Skip verification of unassigned page: 33.77%
+06:28:56.741  Skip verification of unassigned page: 34.79%
+06:28:56.756  Skip verification of unassigned page: 35.81%
+06:28:56.760  Skip verification of unassigned page: 36.84%
+06:28:56.763  Skip verification of unassigned page: 37.86%
+06:28:56.767  Skip verification of unassigned page: 38.88%
+06:28:56.770  Skip verification of unassigned page: 39.90%
+06:28:56.775  Page: 40 verified OK.93%
+06:28:56.777  Skip verification of unassigned page: 41.95%
+06:28:56.780  Skip verification of unassigned page: 42.97%
+06:28:56.782  Page: 43 verified OK.100%
+06:28:56.785  OK
+06:28:56.788  Reset target ...
+06:28:56.791  OK
+06:28:56.794  ✓ Flash complete — GS Board  (APID 0x010)
+06:29:00.600    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x010
+06:29:00.677    ← RX  [CCSDS RAW] 08 01 C0 02 00 23 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A9 04 B8 0C 00 FF 00 00
+06:29:00.754    ← RX  tlm_beacon  apid=0x001 seq=2
+06:29:00.911    ✓ tlm_beacon received seq=2 from 0x010
+06:29:11.247  Serial port closed.
+06:29:11.337  Connected: COM12 @ 921600
+06:29:11.340  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+06:29:30.967  COM ports refreshed. 4 port(s) found.
+06:29:34.611  Connected: COM8 @ 921600
+06:29:34.616  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+06:29:39.756  Serial port closed.
+06:29:39.770  Connected: COM8 @ 921600
+06:29:39.774  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:29:45.559  RF Power: patched radio.h → TX_POWER = BENCH (0 dBm bench)
+06:29:45.564  Board: patched ccsds.h → SCK_APID_THIS_BOARD = 0x010 (GS Board  (APID 0x010))
+06:29:45.569  security.h: patched with production keys from Provision tab
+06:29:45.572    Key 0: 6140b35e...56f92a4d
+06:29:45.575    Key 1: 604a1517...a46cba4a
+06:29:45.578    Key 2: 9b52e05f...42a4856a
+06:29:45.587  ══════════════════════════════════════════════════
+06:29:45.591    SCK-2400 Build  →  GS Board  (APID 0x010)
+06:29:45.594    SCK_APID_THIS_BOARD = 0x010
+06:29:45.596    Build type: full
+06:29:45.599  ══════════════════════════════════════════════════
+06:29:48.863  # ================================================================================
+06:29:48.871  # [Thu Jul 02 06:29:48 CDT 2026]: CCS headless build starting...
+06:29:48.989  **** Clean-only build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:29:49.037  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 clean -r -O
+06:29:49.315  DEL /F "syscfg\ti_radio_config.h" "syscfg\ti_drivers_config.h" "syscfg\ti_utils_build_linker.cmd.genlibs" "syscfg\ti_utils_build_linker.cmd.genmap" "syscfg\syscfg_c.rov.xs" "syscfg\ti_sysbios_config.h" "syscfg\ti_devices_config.c" "syscfg\ti_radio_config.c" "syscfg\ti_drivers_config.c" "syscfg\ti_utils_build_compiler.opt" "syscfg\ti_sysbios_config.c" "sck2400_firmware.out"
+06:29:49.319  DEL /F "RFQueue.o" "ccsds.o" "crypto.o" "main.o" "main_tirtos.o" "nv_storage.o" "oad_flash_stub.o" "oad_image_header_app.o" "oad_task.o" "radio.o" "syscfg\ti_devices_config.o" "syscfg\ti_radio_config.o" "syscfg\ti_drivers_config.o" "syscfg\ti_sysbios_config.o" "telemetry.o" "uart.o"
+06:29:49.323  DEL /F "RFQueue.d" "ccsds.d" "crypto.d" "main.d" "main_tirtos.d" "nv_storage.d" "oad_flash_stub.d" "oad_image_header_app.d" "oad_task.d" "radio.d" "syscfg\ti_devices_config.d" "syscfg\ti_radio_config.d" "syscfg\ti_drivers_config.d" "syscfg\ti_sysbios_config.d" "telemetry.d" "uart.d"
+06:29:49.341  RMDIR /S/Q "syscfg"
+06:29:49.364  **** Build finished ****
+06:29:51.510  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:29:51.523  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:29:53.486  SysConfig - building file: "../sck2400.syscfg"
+06:29:53.494  "C:/ti/sysconfig_1.21.1/sysconfig_cli.bat" -s "C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/.metadata/product.json" --script "C:/Users/maxor/workspace_ccstheia/sck2400_firmware/sck2400.syscfg" -o "syscfg" --compiler ticlang
+06:29:53.501  Running script...
+06:29:53.505  Validating...
+06:29:53.509  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin: Connected to hardware
+06:29:53.512  DIO8/14 is connected to LaunchPad SPI Bus on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:29:53.514  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin: Connected to hardware
+06:29:53.517  DIO20/38 is connected to MX25R8035F SPI Flash Chip Select on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:29:53.520  0 error(s), 2 warning(s)
+06:29:53.524  Generating Code (sck2400.syscfg)...
+06:29:53.527  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_devices_config.c...
+06:29:53.530  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.c...
+06:29:53.533  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.h...
+06:29:53.536  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.c...
+06:29:53.539  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.h...
+06:29:53.542  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genlibs...
+06:29:53.545  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genmap...
+06:29:53.548  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_compiler.opt...
+06:29:53.551  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\syscfg_c.rov.xs...
+06:29:53.567  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.h...
+06:29:53.570  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.c...
+06:29:53.573  Finished building: "../sck2400.syscfg"
+06:29:53.885  Arm Compiler - building file: "../RFQueue.c"
+06:29:53.890  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"RFQueue.d_raw" -MT"RFQueue.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"RFQueue.o" "../RFQueue.c"
+06:29:53.894  Finished building: "../RFQueue.c"
+06:29:53.918  Arm Compiler - building file: "../ccsds.c"
+06:29:53.923  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"ccsds.d_raw" -MT"ccsds.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"ccsds.o" "../ccsds.c"
+06:29:53.928  Finished building: "../ccsds.c"
+06:29:54.329  Arm Compiler - building file: "../crypto.c"
+06:29:54.502  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"crypto.d_raw" -MT"crypto.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"crypto.o" "../crypto.c"
+06:29:54.508  Finished building: "../crypto.c"
+06:29:54.550  Arm Compiler - building file: "../main_tirtos.c"
+06:29:54.554  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main_tirtos.d_raw" -MT"main_tirtos.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main_tirtos.o" "../main_tirtos.c"
+06:29:54.560  Finished building: "../main_tirtos.c"
+06:29:54.588  Arm Compiler - building file: "../main.c"
+06:29:54.681  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main.d_raw" -MT"main.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main.o" "../main.c"
+06:29:54.686  Finished building: "../main.c"
+06:29:54.957  Arm Compiler - building file: "../nv_storage.c"
+06:29:54.964  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"nv_storage.d_raw" -MT"nv_storage.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"nv_storage.o" "../nv_storage.c"
+06:29:54.968  Finished building: "../nv_storage.c"
+06:29:54.971  Arm Compiler - building file: "../oad_image_header_app.c"
+06:29:54.975  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:29:54.979  Finished building: "../oad_image_header_app.c"
+06:29:55.002  Arm Compiler - building file: "../oad_flash_stub.c"
+06:29:55.071  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_flash_stub.d_raw" -MT"oad_flash_stub.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_flash_stub.o" "../oad_flash_stub.c"
+06:29:55.076  Finished building: "../oad_flash_stub.c"
+06:29:55.079  Arm Compiler - building file: "../oad_task.c"
+06:29:55.082  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_task.d_raw" -MT"oad_task.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_task.o" "../oad_task.c"
+06:29:55.086  Finished building: "../oad_task.c"
+06:29:55.613  Arm Compiler - building file: "../radio.c"
+06:29:55.619  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"radio.d_raw" -MT"radio.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"radio.o" "../radio.c"
+06:29:55.623  Finished building: "../radio.c"
+06:29:55.626  Arm Compiler - building file: "syscfg/ti_devices_config.c"
+06:29:55.630  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_devices_config.d_raw" -MT"syscfg/ti_devices_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_devices_config.o" "syscfg/ti_devices_config.c"
+06:29:55.654  Finished building: "syscfg/ti_devices_config.c"
+06:29:55.659  Arm Compiler - building file: "syscfg/ti_radio_config.c"
+06:29:55.662  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_radio_config.d_raw" -MT"syscfg/ti_radio_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_radio_config.o" "syscfg/ti_radio_config.c"
+06:29:55.667  Finished building: "syscfg/ti_radio_config.c"
+06:29:55.686  Arm Compiler - building file: "syscfg/ti_drivers_config.c"
+06:29:55.692  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_drivers_config.d_raw" -MT"syscfg/ti_drivers_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_drivers_config.o" "syscfg/ti_drivers_config.c"
+06:29:55.702  Finished building: "syscfg/ti_drivers_config.c"
+06:29:56.257  Arm Compiler - building file: "../telemetry.c"
+06:29:56.261  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"telemetry.d_raw" -MT"telemetry.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"telemetry.o" "../telemetry.c"
+06:29:56.266  Finished building: "../telemetry.c"
+06:29:56.276  Arm Compiler - building file: "../uart.c"
+06:29:56.280  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"uart.d_raw" -MT"uart.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"uart.o" "../uart.c"
+06:29:56.303  Finished building: "../uart.c"
+06:29:56.987  Arm Compiler - building file: "syscfg/ti_sysbios_config.c"
+06:29:57.140  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_sysbios_config.d_raw" -MT"syscfg/ti_sysbios_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_sysbios_config.o" "syscfg/ti_sysbios_config.c"
+06:29:57.145  Finished building: "syscfg/ti_sysbios_config.c"
+06:29:57.170  Arm Linker - building target: "sck2400_firmware.out"
+06:29:57.176  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:29:57.924  Finished building target: "sck2400_firmware.out"
+06:29:57.975  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:29:57.985  Translating to Intel format...
+06:29:57.990  "sck2400_firmware.out" .image_header ==> .image_header
+06:29:57.993  "sck2400_firmware.out" .text ==> .text
+06:29:57.998  "sck2400_firmware.out" .rodata ==> .rodata
+06:29:58.020  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:29:58.024  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:29:58.027  "sck2400_firmware.out" .args ==> .args
+06:29:58.031  "sck2400_firmware.out" .cinit ==> .cinit
+06:29:58.035  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:29:58.078  **** Build finished ****
+06:29:58.202  # ----------------------------------------
+06:29:58.207  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:29:58.256  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:29:58.261  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:29:58.264  # --------------------------------------------------------------------------------
+06:29:58.268  # [Thu Jul 02 06:29:58 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:29:58.882  ✓ Build succeeded: C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\sck2400_firmware.hex
+06:29:58.886    Board: GS Board  (APID 0x010)  APID: 0x010
+06:29:58.889  OAD patch: reading oad_entry_vec address from map file...
+06:29:58.892  OAD patch: oad_entry_vec at 0x0000E620 (summary table)
+06:29:58.896  OAD patch: computed image len = 0x0004E000 (end=0x00052000)
+06:29:58.899  OAD patch: .prgEntry already 0x0000E620 or pattern not found.
+06:29:58.905  OAD patch: .len already 0x0004E000 or pattern not found.
+06:29:58.910  OAD patch: deleted stale oad_image_header_app.o
+06:29:58.913  OAD patch: incremental rebuild to bake prgEntry...
+06:30:02.159  # ================================================================================
+06:30:02.164  # [Thu Jul 02 06:30:02 CDT 2026]: CCS headless build starting...
+06:30:04.452  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:30:04.485  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:30:04.787  Arm Compiler - building file: "../oad_image_header_app.c"
+06:30:04.791  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:30:04.795  Finished building: "../oad_image_header_app.c"
+06:30:04.849  Arm Linker - building target: "sck2400_firmware.out"
+06:30:04.854  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:30:05.644  Finished building target: "sck2400_firmware.out"
+06:30:05.704  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:30:05.716  Translating to Intel format...
+06:30:05.720  "sck2400_firmware.out" .image_header ==> .image_header
+06:30:05.725  "sck2400_firmware.out" .text ==> .text
+06:30:05.740  "sck2400_firmware.out" .rodata ==> .rodata
+06:30:05.745  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:30:05.748  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:30:05.751  "sck2400_firmware.out" .args ==> .args
+06:30:05.756  "sck2400_firmware.out" .cinit ==> .cinit
+06:30:05.760  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:30:05.808  **** Build finished ****
+06:30:05.837  # ----------------------------------------
+06:30:05.843  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:30:05.847  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:30:05.853  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:30:05.858  # --------------------------------------------------------------------------------
+06:30:05.862  # [Thu Jul 02 06:30:05 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:30:06.400  OAD patch: rebuild OK — prgEntry = 0x0000E620
+06:30:09.315  XDS110 detected: Serial = L43003QX
+06:30:09.361  ✓ Merged BIM + firmware → C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:30:09.374  ══════════════════════════════════════════════════
+06:30:09.378    SCK-2400 Local Flash  →  GS Board  (APID 0x010)
+06:30:09.381    XDS110: L43003QX
+06:30:09.384    HEX: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:30:09.387  ══════════════════════════════════════════════════
+06:30:09.391  srfprog -t soc(XDS-L43003QX, CC1352P) -e all -p all -v rb -f "C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex"
+06:30:15.435  Texas Instruments SmartRF Flash Programmer 2 v1.8.2-windows
+06:30:15.438  -------------------------------------------------------------------------------
+06:30:15.441  Connected over 2-pin cJTAG.
+06:30:15.445  Reading file: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex.
+06:30:15.448  Start flash erase ...
+06:30:15.473  OK
+06:30:15.476  Start flash programming ...
+06:30:15.479  0%0%4%9%13%93%99%100%
+06:30:15.483  OK
+06:30:15.486  Start flash verify ...
+06:30:15.491  0%0%
+06:30:15.503  Page: 0 verified OK.2%
+06:30:15.507  Skip verification of unassigned page: 1.4%
+06:30:15.510  Page: 2 verified OK.6%
+06:30:15.514  Page: 3 verified OK.9%
+06:30:15.517  Page: 4 verified OK.11%
+06:30:15.537  Page: 5 verified OK.13%
+06:30:15.541  Page: 6 verified OK.15%
+06:30:15.544  Page: 7 verified OK.18%
+06:30:15.548  Skip verification of unassigned page: 8.20%
+06:30:15.551  Skip verification of unassigned page: 9.22%
+06:30:15.556  Skip verification of unassigned page: 10.25%
+06:30:15.574  Skip verification of unassigned page: 11.27%
+06:30:15.577  Skip verification of unassigned page: 12.29%
+06:30:15.580  Skip verification of unassigned page: 13.31%
+06:30:15.583  Skip verification of unassigned page: 14.34%
+06:30:15.586  Skip verification of unassigned page: 15.36%
+06:30:15.604  Skip verification of unassigned page: 16.38%
+06:30:15.608  Skip verification of unassigned page: 17.40%
+06:30:15.612  Skip verification of unassigned page: 18.43%
+06:30:15.617  Skip verification of unassigned page: 19.45%
+06:30:15.620  Skip verification of unassigned page: 20.47%
+06:30:15.625  Skip verification of unassigned page: 21.50%
+06:30:15.639  Skip verification of unassigned page: 22.52%
+06:30:15.642  Skip verification of unassigned page: 23.54%
+06:30:15.645  Skip verification of unassigned page: 24.56%
+06:30:15.649  Skip verification of unassigned page: 25.59%
+06:30:15.652  Skip verification of unassigned page: 26.61%
+06:30:15.672  Skip verification of unassigned page: 27.63%
+06:30:15.676  Skip verification of unassigned page: 28.65%
+06:30:15.679  Skip verification of unassigned page: 29.68%
+06:30:15.682  Skip verification of unassigned page: 30.70%
+06:30:15.686  Skip verification of unassigned page: 31.72%
+06:30:15.691  Skip verification of unassigned page: 32.75%
+06:30:15.704  Skip verification of unassigned page: 33.77%
+06:30:15.708  Skip verification of unassigned page: 34.79%
+06:30:15.711  Skip verification of unassigned page: 35.81%
+06:30:15.715  Skip verification of unassigned page: 36.84%
+06:30:15.718  Skip verification of unassigned page: 37.86%
+06:30:15.736  Skip verification of unassigned page: 38.88%
+06:30:15.739  Skip verification of unassigned page: 39.90%
+06:30:15.742  Page: 40 verified OK.93%
+06:30:15.746  Skip verification of unassigned page: 41.95%
+06:30:15.749  Skip verification of unassigned page: 42.97%
+06:30:15.772  Page: 43 verified OK.100%
+06:30:15.775  OK
+06:30:15.779  Reset target ...
+06:30:15.782  OK
+06:30:15.785  ✓ Flash complete — GS Board  (APID 0x010)
+06:30:21.941    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+06:30:26.952    ✗ No telem reply
+06:30:34.468    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+06:30:39.469    ✗ No telem reply
+06:30:43.307  XDS110 detected: Serial = L43003QX
+06:30:43.348  ✓ Merged BIM + firmware → C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:30:43.354  ══════════════════════════════════════════════════
+06:30:43.357    SCK-2400 Local Flash  →  GS Board  (APID 0x010)
+06:30:43.361    XDS110: L43003QX
+06:30:43.364    HEX: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:30:43.368  ══════════════════════════════════════════════════
+06:30:43.389  srfprog -t soc(XDS-L43003QX, CC1352P) -e all -p all -v rb -f "C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex"
+06:30:49.434  Texas Instruments SmartRF Flash Programmer 2 v1.8.2-windows
+06:30:49.437  -------------------------------------------------------------------------------
+06:30:49.441  Connected over 2-pin cJTAG.
+06:30:49.444  Reading file: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex.
+06:30:49.454  Start flash erase ...
+06:30:49.457  OK
+06:30:49.461  Start flash programming ...
+06:30:49.464  0%0%4%9%13%93%99%100%
+06:30:49.468  OK
+06:30:49.489  Start flash verify ...
+06:30:49.492  0%0%
+06:30:49.496  Page: 0 verified OK.2%
+06:30:49.499  Skip verification of unassigned page: 1.4%
+06:30:49.503  Page: 2 verified OK.6%
+06:30:49.508  Page: 3 verified OK.9%
+06:30:49.521  Page: 4 verified OK.11%
+06:30:49.524  Page: 5 verified OK.13%
+06:30:49.528  Page: 6 verified OK.15%
+06:30:49.531  Page: 7 verified OK.18%
+06:30:49.535  Skip verification of unassigned page: 8.20%
+06:30:49.555  Skip verification of unassigned page: 9.22%
+06:30:49.558  Skip verification of unassigned page: 10.25%
+06:30:49.562  Skip verification of unassigned page: 11.27%
+06:30:49.565  Skip verification of unassigned page: 12.29%
+06:30:49.569  Skip verification of unassigned page: 13.31%
+06:30:49.578  Skip verification of unassigned page: 14.34%
+06:30:49.582  Skip verification of unassigned page: 15.36%
+06:30:49.585  Skip verification of unassigned page: 16.38%
+06:30:49.589  Skip verification of unassigned page: 17.40%
+06:30:49.592  Skip verification of unassigned page: 18.43%
+06:30:49.623  Skip verification of unassigned page: 19.45%
+06:30:49.626  Skip verification of unassigned page: 20.47%
+06:30:49.629  Skip verification of unassigned page: 21.50%
+06:30:49.633  Skip verification of unassigned page: 22.52%
+06:30:49.636  Skip verification of unassigned page: 23.54%
+06:30:49.641  Skip verification of unassigned page: 24.56%
+06:30:49.670  Skip verification of unassigned page: 25.59%
+06:30:49.674  Skip verification of unassigned page: 26.61%
+06:30:49.678  Skip verification of unassigned page: 27.63%
+06:30:49.681  Skip verification of unassigned page: 28.65%
+06:30:49.685  Skip verification of unassigned page: 29.68%
+06:30:49.705  Skip verification of unassigned page: 30.70%
+06:30:49.708  Skip verification of unassigned page: 31.72%
+06:30:49.712  Skip verification of unassigned page: 32.75%
+06:30:49.715  Skip verification of unassigned page: 33.77%
+06:30:49.719  Skip verification of unassigned page: 34.79%
+06:30:49.739  Skip verification of unassigned page: 35.81%
+06:30:49.743  Skip verification of unassigned page: 36.84%
+06:30:49.746  Skip verification of unassigned page: 37.86%
+06:30:49.749  Skip verification of unassigned page: 38.88%
+06:30:49.753  Skip verification of unassigned page: 39.90%
+06:30:49.770  Page: 40 verified OK.93%
+06:30:49.774  Skip verification of unassigned page: 41.95%
+06:30:49.778  Skip verification of unassigned page: 42.97%
+06:30:49.781  Page: 43 verified OK.100%
+06:30:49.785  OK
+06:30:49.805  Reset target ...
+06:30:49.809  OK
+06:30:49.812  ✓ Flash complete — GS Board  (APID 0x010)
+06:30:53.493    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+06:30:58.503    ✗ No telem reply
+06:31:06.446  RF Power: patched radio.h → TX_POWER = BENCH (0 dBm bench)
+06:31:06.452  Board: patched ccsds.h → SCK_APID_THIS_BOARD = 0x011 (Remote 1  (APID 0x011))
+06:31:06.458  security.h: patched with production keys from Provision tab
+06:31:06.462    Key 0: 6140b35e...56f92a4d
+06:31:06.466    Key 1: 604a1517...a46cba4a
+06:31:06.487    Key 2: 9b52e05f...42a4856a
+06:31:06.498  ══════════════════════════════════════════════════
+06:31:06.501    SCK-2400 Build  →  Remote 1  (APID 0x011)
+06:31:06.504    SCK_APID_THIS_BOARD = 0x011
+06:31:06.508    Build type: full
+06:31:06.520  ══════════════════════════════════════════════════
+06:31:09.778  # ================================================================================
+06:31:09.783  # [Thu Jul 02 06:31:09 CDT 2026]: CCS headless build starting...
+06:31:09.922  **** Clean-only build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:31:09.972  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 clean -r -O
+06:31:10.227  DEL /F "syscfg\ti_radio_config.h" "syscfg\ti_drivers_config.h" "syscfg\ti_utils_build_linker.cmd.genlibs" "syscfg\ti_utils_build_linker.cmd.genmap" "syscfg\syscfg_c.rov.xs" "syscfg\ti_sysbios_config.h" "syscfg\ti_devices_config.c" "syscfg\ti_radio_config.c" "syscfg\ti_drivers_config.c" "syscfg\ti_utils_build_compiler.opt" "syscfg\ti_sysbios_config.c" "sck2400_firmware.out"
+06:31:10.234  DEL /F "RFQueue.o" "ccsds.o" "crypto.o" "main.o" "main_tirtos.o" "nv_storage.o" "oad_flash_stub.o" "oad_image_header_app.o" "oad_task.o" "radio.o" "syscfg\ti_devices_config.o" "syscfg\ti_radio_config.o" "syscfg\ti_drivers_config.o" "syscfg\ti_sysbios_config.o" "telemetry.o" "uart.o"
+06:31:10.239  DEL /F "RFQueue.d" "ccsds.d" "crypto.d" "main.d" "main_tirtos.d" "nv_storage.d" "oad_flash_stub.d" "oad_image_header_app.d" "oad_task.d" "radio.d" "syscfg\ti_devices_config.d" "syscfg\ti_radio_config.d" "syscfg\ti_drivers_config.d" "syscfg\ti_sysbios_config.d" "telemetry.d" "uart.d"
+06:31:10.243  RMDIR /S/Q "syscfg"
+06:31:10.277  **** Build finished ****
+06:31:12.477  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:31:12.491  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:31:14.780  SysConfig - building file: "../sck2400.syscfg"
+06:31:14.789  "C:/ti/sysconfig_1.21.1/sysconfig_cli.bat" -s "C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/.metadata/product.json" --script "C:/Users/maxor/workspace_ccstheia/sck2400_firmware/sck2400.syscfg" -o "syscfg" --compiler ticlang
+06:31:14.794  Running script...
+06:31:14.813  Validating...
+06:31:14.816  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin: Connected to hardware
+06:31:14.820  DIO8/14 is connected to LaunchPad SPI Bus on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:31:14.824  warning: CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin: Connected to hardware
+06:31:14.827  DIO20/38 is connected to MX25R8035F SPI Flash Chip Select on the CC1352P-2 LaunchPad. Consider selecting it in 'use hardware' above. Using a custom board?
+06:31:14.854  0 error(s), 2 warning(s)
+06:31:14.858  Generating Code (sck2400.syscfg)...
+06:31:14.861  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_devices_config.c...
+06:31:14.865  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.c...
+06:31:14.868  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_radio_config.h...
+06:31:14.886  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.c...
+06:31:14.890  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_drivers_config.h...
+06:31:14.894  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genlibs...
+06:31:14.898  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_linker.cmd.genmap...
+06:31:14.902  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_utils_build_compiler.opt...
+06:31:14.921  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\syscfg_c.rov.xs...
+06:31:14.925  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.h...
+06:31:14.928  Writing C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\syscfg\ti_sysbios_config.c...
+06:31:14.932  Finished building: "../sck2400.syscfg"
+06:31:15.648  Arm Compiler - building file: "../RFQueue.c"
+06:31:15.654  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"RFQueue.d_raw" -MT"RFQueue.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"RFQueue.o" "../RFQueue.c"
+06:31:15.660  Finished building: "../RFQueue.c"
+06:31:15.686  Arm Compiler - building file: "../ccsds.c"
+06:31:15.706  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"ccsds.d_raw" -MT"ccsds.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"ccsds.o" "../ccsds.c"
+06:31:15.713  Finished building: "../ccsds.c"
+06:31:15.718  Arm Compiler - building file: "../crypto.c"
+06:31:15.723  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"crypto.d_raw" -MT"crypto.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"crypto.o" "../crypto.c"
+06:31:15.749  Finished building: "../crypto.c"
+06:31:15.753  Arm Compiler - building file: "../main.c"
+06:31:15.756  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main.d_raw" -MT"main.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main.o" "../main.c"
+06:31:15.780  Finished building: "../main.c"
+06:31:15.783  Arm Compiler - building file: "../main_tirtos.c"
+06:31:15.788  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"main_tirtos.d_raw" -MT"main_tirtos.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"main_tirtos.o" "../main_tirtos.c"
+06:31:15.792  Finished building: "../main_tirtos.c"
+06:31:16.049  Arm Compiler - building file: "../nv_storage.c"
+06:31:16.055  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"nv_storage.d_raw" -MT"nv_storage.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"nv_storage.o" "../nv_storage.c"
+06:31:16.060  Finished building: "../nv_storage.c"
+06:31:16.090  Arm Compiler - building file: "../oad_flash_stub.c"
+06:31:16.094  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_flash_stub.d_raw" -MT"oad_flash_stub.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_flash_stub.o" "../oad_flash_stub.c"
+06:31:16.098  Finished building: "../oad_flash_stub.c"
+06:31:16.260  Arm Compiler - building file: "../oad_image_header_app.c"
+06:31:16.297  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:31:16.303  Finished building: "../oad_image_header_app.c"
+06:31:16.476  Arm Compiler - building file: "../oad_task.c"
+06:31:16.488  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_task.d_raw" -MT"oad_task.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_task.o" "../oad_task.c"
+06:31:16.492  Finished building: "../oad_task.c"
+06:31:16.719  Arm Compiler - building file: "../radio.c"
+06:31:16.735  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"radio.d_raw" -MT"radio.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"radio.o" "../radio.c"
+06:31:16.740  Finished building: "../radio.c"
+06:31:16.790  Arm Compiler - building file: "syscfg/ti_devices_config.c"
+06:31:16.797  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_devices_config.d_raw" -MT"syscfg/ti_devices_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_devices_config.o" "syscfg/ti_devices_config.c"
+06:31:16.816  Finished building: "syscfg/ti_devices_config.c"
+06:31:16.821  Arm Compiler - building file: "syscfg/ti_radio_config.c"
+06:31:16.825  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_radio_config.d_raw" -MT"syscfg/ti_radio_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_radio_config.o" "syscfg/ti_radio_config.c"
+06:31:16.832  Finished building: "syscfg/ti_radio_config.c"
+06:31:16.952  Arm Compiler - building file: "syscfg/ti_drivers_config.c"
+06:31:16.960  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_drivers_config.d_raw" -MT"syscfg/ti_drivers_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_drivers_config.o" "syscfg/ti_drivers_config.c"
+06:31:16.964  Finished building: "syscfg/ti_drivers_config.c"
+06:31:17.219  Arm Compiler - building file: "../telemetry.c"
+06:31:17.223  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"telemetry.d_raw" -MT"telemetry.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"telemetry.o" "../telemetry.c"
+06:31:17.228  Finished building: "../telemetry.c"
+06:31:17.471  Arm Compiler - building file: "../uart.c"
+06:31:17.476  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"uart.d_raw" -MT"uart.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"uart.o" "../uart.c"
+06:31:17.480  Finished building: "../uart.c"
+06:31:18.344  Arm Compiler - building file: "syscfg/ti_sysbios_config.c"
+06:31:18.371  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"syscfg/ti_sysbios_config.d_raw" -MT"syscfg/ti_sysbios_config.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"syscfg/ti_sysbios_config.o" "syscfg/ti_sysbios_config.c"
+06:31:18.376  Finished building: "syscfg/ti_sysbios_config.c"
+06:31:18.396  Arm Linker - building target: "sck2400_firmware.out"
+06:31:18.411  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:31:19.124  Finished building target: "sck2400_firmware.out"
+06:31:19.175  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:31:19.186  Translating to Intel format...
+06:31:19.191  "sck2400_firmware.out" .image_header ==> .image_header
+06:31:19.195  "sck2400_firmware.out" .text ==> .text
+06:31:19.199  "sck2400_firmware.out" .rodata ==> .rodata
+06:31:19.221  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:31:19.227  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:31:19.232  "sck2400_firmware.out" .args ==> .args
+06:31:19.254  "sck2400_firmware.out" .cinit ==> .cinit
+06:31:19.258  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:31:19.284  **** Build finished ****
+06:31:19.417  # ----------------------------------------
+06:31:19.422  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:31:19.427  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:31:19.450  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:31:19.456  # --------------------------------------------------------------------------------
+06:31:19.461  # [Thu Jul 02 06:31:19 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:31:19.933  ✓ Build succeeded: C:\Users\maxor\workspace_ccstheia\sck2400_firmware\Debug\sck2400_firmware.hex
+06:31:19.953    Board: Remote 1  (APID 0x011)  APID: 0x011
+06:31:19.957  OAD patch: reading oad_entry_vec address from map file...
+06:31:19.961  OAD patch: oad_entry_vec at 0x0000E5BC (summary table)
+06:31:19.972  OAD patch: computed image len = 0x0004E000 (end=0x00052000)
+06:31:19.976  OAD patch: .prgEntry updated to 0x0000E5BC
+06:31:19.979  OAD patch: .len already 0x0004E000 or pattern not found.
+06:31:20.004  OAD patch: deleted stale oad_image_header_app.o
+06:31:20.008  OAD patch: incremental rebuild to bake prgEntry...
+06:31:23.273  # ================================================================================
+06:31:23.281  # [Thu Jul 02 06:31:23 CDT 2026]: CCS headless build starting...
+06:31:25.493  **** Build of configuration 'Debug' for project 'sck2400_firmware' ****
+06:31:25.526  "C:\\ti\\ccs2051\\ccs\\utils\\bin\\gmake" -k -j 12 all -r -O
+06:31:25.825  Arm Compiler - building file: "../oad_image_header_app.c"
+06:31:25.852  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -c -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -I"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source/ti/posix/ticlang" -gdwarf-3 -march=armv7e-m -MMD -MP -MF"oad_image_header_app.d_raw" -MT"oad_image_header_app.o" -I"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg"  @"syscfg/ti_utils_build_compiler.opt"  -o"oad_image_header_app.o" "../oad_image_header_app.c"
+06:31:25.927  Finished building: "../oad_image_header_app.c"
+06:31:25.967  Arm Linker - building target: "sck2400_firmware.out"
+06:31:25.992  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmclang.exe" -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -mthumb -Oz -gdwarf-3 -march=armv7e-m -Wl,-m"sck2400_firmware.map" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/source" -Wl,-i"C:/ti/simplelink_cc13xx_cc26xx_sdk_8_32_00_07/kernel/tirtos7/packages" -Wl,-i"C:/Users/maxor/workspace_ccstheia/sck2400_firmware/Debug/syscfg" -Wl,-i"C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/lib" -Wl,--diag_wrap=off -Wl,--display_error_number -Wl,--warn_sections -Wl,--xml_link_info="sck2400_firmware_linkInfo.xml" -Wl,--rom_model -o "sck2400_firmware.out" "./RFQueue.o" "./ccsds.o" "./crypto.o" "./main.o" "./main_tirtos.o" "./nv_storage.o" "./oad_flash_stub.o" "./oad_image_header_app.o" "./oad_task.o" "./radio.o" "./syscfg/ti_devices_config.o" "./syscfg/ti_radio_config.o" "./syscfg/ti_drivers_config.o" "./syscfg/ti_sysbios_config.o" "./telemetry.o" "./uart.o" "../cc13x2_cc26x2_tirtos7.cmd"  -Wl,-lti_utils_build_linker.cmd.genlibs -Wl,-llibc.a
+06:31:26.863  Finished building target: "sck2400_firmware.out"
+06:31:26.961  "C:/ti/ti_cgt_arm_llvm_3.2.2.LTS/bin/tiarmhex" -order MS --memwidth=8 --romwidth=8 --intel -o "sck2400_firmware.hex" "sck2400_firmware"
+06:31:26.989  Translating to Intel format...
+06:31:26.993  "sck2400_firmware.out" .image_header ==> .image_header
+06:31:26.997  "sck2400_firmware.out" .text ==> .text
+06:31:27.004  "sck2400_firmware.out" .rodata ==> .rodata
+06:31:27.008  "sck2400_firmware.out" .resetVecs ==> .resetVecs
+06:31:27.013  "sck2400_firmware.out" .oad_entry_vec ==> .oad_entry_vec
+06:31:27.017  "sck2400_firmware.out" .args ==> .args
+06:31:27.036  "sck2400_firmware.out" .cinit ==> .cinit
+06:31:27.041  "sck2400_firmware.out" .ccfg ==> .ccfg
+06:31:27.061  **** Build finished ****
+06:31:27.090  # ----------------------------------------
+06:31:27.096  # Problem summary for project 'sck2400_firmware': 0 errors, 2 warnings
+06:31:27.099  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.pociPin]: Connected to hardware
+06:31:27.109  Warning: sck2400.syscfg [CONFIG_SPI_0(/ti/drivers/SPI) spi.csnPin]: Connected to hardware
+06:31:27.114  # --------------------------------------------------------------------------------
+06:31:27.119  # [Thu Jul 02 06:31:27 CDT 2026]: CCS headless build complete - 0 out of 1 projects have errors
+06:31:27.594  OAD patch: rebuild OK — prgEntry = 0x0000E5BC
+06:31:29.124  XDS110 detected: Serial = L43003QX
+06:31:29.161  ✓ Merged BIM + firmware → C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:31:29.171  ══════════════════════════════════════════════════
+06:31:29.176    SCK-2400 Local Flash  →  Remote 1  (APID 0x011)
+06:31:29.182    XDS110: L43003QX
+06:31:29.186    HEX: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex
+06:31:29.205  ══════════════════════════════════════════════════
+06:31:29.209  srfprog -t soc(XDS-L43003QX, CC1352P) -e all -p all -v rb -f "C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex"
+06:31:35.455  Texas Instruments SmartRF Flash Programmer 2 v1.8.2-windows
+06:31:35.472  -------------------------------------------------------------------------------
+06:31:35.475  Connected over 2-pin cJTAG.
+06:31:35.479  Reading file: C:\Users\maxor\workspace_ccstheia\sck2400_merged.hex.
+06:31:35.488  Start flash erase ...
+06:31:35.492  OK
+06:31:35.495  Start flash programming ...
+06:31:35.501  0%0%4%9%13%93%99%100%
+06:31:35.525  OK
+06:31:35.529  Start flash verify ...
+06:31:35.533  0%0%
+06:31:35.554  Page: 0 verified OK.2%
+06:31:35.558  Skip verification of unassigned page: 1.4%
+06:31:35.562  Page: 2 verified OK.6%
+06:31:35.571  Page: 3 verified OK.9%
+06:31:35.575  Page: 4 verified OK.11%
+06:31:35.579  Page: 5 verified OK.13%
+06:31:35.589  Page: 6 verified OK.15%
+06:31:35.592  Page: 7 verified OK.18%
+06:31:35.596  Skip verification of unassigned page: 8.20%
+06:31:35.619  Skip verification of unassigned page: 9.22%
+06:31:35.624  Skip verification of unassigned page: 10.25%
+06:31:35.629  Skip verification of unassigned page: 11.27%
+06:31:35.652  Skip verification of unassigned page: 12.29%
+06:31:35.657  Skip verification of unassigned page: 13.31%
+06:31:35.661  Skip verification of unassigned page: 14.34%
+06:31:35.671  Skip verification of unassigned page: 15.36%
+06:31:35.674  Skip verification of unassigned page: 16.38%
+06:31:35.678  Skip verification of unassigned page: 17.40%
+06:31:35.687  Skip verification of unassigned page: 18.43%
+06:31:35.691  Skip verification of unassigned page: 19.45%
+06:31:35.695  Skip verification of unassigned page: 20.47%
+06:31:35.703  Skip verification of unassigned page: 21.50%
+06:31:35.707  Skip verification of unassigned page: 22.52%
+06:31:35.711  Skip verification of unassigned page: 23.54%
+06:31:35.719  Skip verification of unassigned page: 24.56%
+06:31:35.724  Skip verification of unassigned page: 25.59%
+06:31:35.729  Skip verification of unassigned page: 26.61%
+06:31:35.739  Skip verification of unassigned page: 27.63%
+06:31:35.743  Skip verification of unassigned page: 28.65%
+06:31:35.747  Skip verification of unassigned page: 29.68%
+06:31:35.772  Skip verification of unassigned page: 30.70%
+06:31:35.775  Skip verification of unassigned page: 31.72%
+06:31:35.779  Skip verification of unassigned page: 32.75%
+06:31:35.788  Skip verification of unassigned page: 33.77%
+06:31:35.792  Skip verification of unassigned page: 34.79%
+06:31:35.796  Skip verification of unassigned page: 35.81%
+06:31:35.804  Skip verification of unassigned page: 36.84%
+06:31:35.808  Skip verification of unassigned page: 37.86%
+06:31:35.812  Skip verification of unassigned page: 38.88%
+06:31:35.821  Skip verification of unassigned page: 39.90%
+06:31:35.824  Page: 40 verified OK.93%
+06:31:35.828  Skip verification of unassigned page: 41.95%
+06:31:35.837  Skip verification of unassigned page: 42.97%
+06:31:35.841  Page: 43 verified OK.100%
+06:31:35.844  OK
+06:31:35.871  Reset target ...
+06:31:35.875  OK
+06:31:35.879  ✓ Flash complete — Remote 1  (APID 0x011)
+06:31:40.180    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x011
+06:31:40.207    ← RX  [CCSDS RAW] 08 01 C0 06 00 23 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A2 04 95 0C 00 FF 00 00
+06:31:40.211    ← RX  tlm_beacon  apid=0x001 seq=6
+06:31:40.220    ✓ tlm_beacon received seq=6 from 0x011
+06:32:17.748  Not connected.
+06:32:23.676  Connect failed: Could not find file 'COM12'.
+06:32:31.461  Connected: COM12 @ 921600
+06:32:31.467  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:32:34.291    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x011
+06:32:39.318    ✗ No telem reply
+06:32:41.516    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x011
+06:32:43.300    ← RX  [CCSDS RAW] 08 01 C0 08 00 23 2E 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 95 0C 00 00 00 00
+06:32:43.318    ← RX  tlm_beacon  apid=0x001 seq=8
+06:32:43.323    ✓ tlm_beacon received seq=8 from 0x011
+06:32:45.980    → TX [0000]  [CCSDS] get_telem seq=9 dest=0x011
+06:32:51.000    ✗ No telem reply
+06:32:51.876    → TX [0000]  [CCSDS] get_telem seq=10 dest=0x011
+06:32:53.886    ← RX  [CCSDS RAW] 08 01 C0 0A 00 23 38 00 00 00 00 00 03 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C 00 00 00 00
+06:32:53.903    ← RX  tlm_beacon  apid=0x001 seq=10
+06:32:53.907    ✓ tlm_beacon received seq=10 from 0x011
+06:32:55.324    → TX [0000]  [CCSDS] get_telem seq=11 dest=0x011
+06:32:56.892    → TX [0000]  [CCSDS] get_telem seq=12 dest=0x011
+06:32:58.781    ← RX  [CCSDS RAW] 08 01 C0 0C 00 23 3D 00 00 00 00 00 04 00 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 95 0C 00 00 00 01
+06:32:58.785    ← RX  tlm_beacon  apid=0x001 seq=12
+06:32:58.801    ✓ tlm_beacon received seq=12 from 0x011
+06:33:00.368    ✗ No telem reply
+06:33:02.684    → TX [0000]  [CCSDS] get_telem seq=13 dest=0x011
+06:33:04.616    ← RX  [CCSDS RAW] 08 01 C0 0D 00 23 43 00 00 00 00 00 05 00 00 00 04 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 00 00 00 01
+06:33:04.620    ← RX  tlm_beacon  apid=0x001 seq=13
+06:33:04.624    ✓ tlm_beacon received seq=13 from 0x011
+06:33:07.636    → TX [0000]  [CCSDS] get_telem seq=14 dest=0x011
+06:33:09.496    ← RX  [CCSDS RAW] 08 01 C0 0E 00 23 48 00 00 00 00 00 06 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C 00 00 00 01
+06:33:09.501    ← RX  tlm_beacon  apid=0x001 seq=14
+06:33:09.517    ✓ tlm_beacon received seq=14 from 0x011
+06:33:12.820    → TX [0000]  [CCSDS] get_telem seq=15 dest=0x011
+06:33:14.361    ← RX  [CCSDS RAW] 08 01 C0 0F 00 23 4D 00 00 00 00 00 07 00 00 00 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 97 0C 00 00 00 01
+06:33:14.386    ← RX  tlm_beacon  apid=0x001 seq=15
+06:33:14.390    ✓ tlm_beacon received seq=15 from 0x011
+06:34:42.670  SCK Ground Station ready.
+06:34:42.699  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:34:42.701  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:34:52.426  Board: SCK-2400 (CCSDS)
+06:45:03.161  Connected: COM12 @ 921600
+06:45:03.164  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:45:05.695    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=2)
+06:45:18.657    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=3)
+06:45:31.454    ✗ No reply
+06:45:38.562    → TX [0011]  [CUSTOM] PICO Ping  opcode=0x20  (seq=4)
+06:45:44.420    ✗ No reply
+06:46:04.087    ✗ No reply
+06:46:19.538    → TX [0011]  [CUSTOM] PICO Ping  opcode=0x20  (seq=5)
+06:46:32.347    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x011
+06:46:37.508    ✗ No telem reply
+06:46:45.302    ✗ No reply
+06:46:56.290    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x011
+06:47:01.401    ✗ No telem reply
+06:47:09.365  SCK Ground Station ready.
+06:47:09.389  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:47:09.390  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:47:12.265  Connected: COM12 @ 921600
+06:47:14.959  Board: SCK-2400 (CCSDS)
+06:47:16.021  Serial port closed.
+06:47:16.028  Connected: COM12 @ 921600
+06:47:16.031  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:47:22.178  SCK Ground Station ready.
+06:47:22.202  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+06:47:22.205  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+06:47:24.679  Board: SCK-2400 (CCSDS)
+06:47:28.137  Connected: COM12 @ 921600
+06:47:28.140  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:47:32.341    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+06:47:37.351    ✗ No telem reply
+06:47:39.553    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+06:47:44.551    ✗ No telem reply
+06:47:46.226    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+06:47:51.216    ✗ No telem reply
+06:47:52.930    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+06:47:57.917    ✗ No telem reply
+06:48:22.190    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x011
+06:48:27.199    ✗ No telem reply
+06:48:47.081    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x010
+06:48:47.119    ← RX  [CCSDS RAW] 08 01 C0 07 00 23 CF 03 00 00 00 00 07 00 00 00 14 00 00 00 00 00 00 00 93 00 00 00 00 00 00 00 00 00 A7 04 B9 0C 00 11 00 10
+06:48:47.123    ← RX  tlm_beacon  apid=0x001 seq=7
+06:48:47.137    ✓ tlm_beacon received seq=7 from 0x010
+06:49:13.755  COM ports refreshed. 2 port(s) found.
+06:49:14.954  COM ports refreshed. 4 port(s) found.
+06:49:18.248  Connected: COM8 @ 921600
+06:49:18.252  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+06:49:22.145    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x010
+06:49:27.162    ✗ No telem reply
+06:49:30.361    → TX [0000]  [CCSDS] get_telem seq=9 dest=0x011
+06:49:30.389    ← RX  [CCSDS RAW] 08 01 C0 09 00 23 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 0E 00 00 00 00 00 00 00 00 00 A4 04 96 0C 02 11 00 00
+06:49:30.390    ← RX  tlm_beacon  apid=0x001 seq=9
+06:49:30.399    ✓ tlm_beacon received seq=9 from 0x011
+06:49:33.177    → TX [0000]  [CCSDS] get_telem seq=10 dest=0x011
+06:49:33.204    ← RX  [CCSDS RAW] 08 01 C0 0A 00 23 13 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 15 00 00 00 00 00 00 00 00 00 A4 04 98 0C 02 11 00 00
+06:49:33.215    ← RX  tlm_beacon  apid=0x001 seq=10
+06:49:33.218    ✓ tlm_beacon received seq=10 from 0x011
+06:49:59.225  Not connected.
+06:50:06.322  Connected: COM12 @ 921600
+06:50:06.324  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+06:50:08.526    → TX [0000]  [CCSDS] get_telem seq=11 dest=0x011
+06:50:10.126    ← RX  [CCSDS RAW] 08 01 C0 0B 00 23 14 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 03 11 00 00
+06:50:10.129    ← RX  tlm_beacon  apid=0x001 seq=11
+06:50:10.132    ✓ tlm_beacon received seq=11 from 0x011
+06:50:12.049    → TX [0000]  [CCSDS] get_telem seq=12 dest=0x011
+06:50:14.056    ← RX  [CCSDS RAW] 08 01 C0 0C 00 23 18 00 00 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 03 11 00 00
+06:50:14.058    ← RX  tlm_beacon  apid=0x001 seq=12
+06:50:14.064    ✓ tlm_beacon received seq=12 from 0x011
+06:50:18.786    → TX [0011]  [CUSTOM] PICO Ping  opcode=0x20  (seq=13)
+06:50:25.582    ← RX  [CCSDS RAW] 08 03 C0 0D 00 01 20 01
+06:50:25.590    ← RX  cmd_ack  apid=0x003 seq=13
+06:50:25.597    ✓ cmd_ack 
+06:50:30.009    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=14)
+06:50:36.172    ← RX  [CCSDS RAW] 08 03 C0 0E 00 01 27 01
+06:50:36.174    ← RX  cmd_ack  apid=0x003 seq=14
+06:50:36.179    ✓ cmd_ack 
+06:50:40.593    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=15)
+06:50:47.702    ← RX  [CCSDS RAW] 08 03 C0 0F 00 01 27 01
+06:50:47.705    ← RX  cmd_ack  apid=0x003 seq=15
+06:50:47.714    ✓ cmd_ack 
+06:51:02.704    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=16)
+06:51:08.733    ← RX  [CCSDS RAW] 08 03 C0 10 00 01 27 01
+06:51:08.736    ← RX  cmd_ack  apid=0x003 seq=16
+06:51:08.746    ✓ cmd_ack 
+06:53:00.989    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=17)
+06:53:02.980    ← RX  [CCSDS RAW] 08 03 C0 11 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 31 2E 34 30 2C 31 38 33 2E 36 2C 31 39 2E 32 32
+06:53:03.014    ← RX  cmd_ack  apid=0x003 seq=17 → "'GPS:0.000000,0.000000,0.0,0,0,991.40,183.6,19.22"
+06:53:03.025    ✓ cmd_ack 
+06:53:11.392    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=18)
+06:53:12.618    ← RX  [CCSDS RAW] 08 03 C0 12 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 31 2E 34 30 2C 31 38 33 2E 36 2C 31 39 2E 32 32
+06:53:12.620    ← RX  cmd_ack  apid=0x003 seq=18 → "'GPS:0.000000,0.000000,0.0,0,0,991.40,183.6,19.22"
+06:53:12.644    ✓ cmd_ack 
+06:55:43.588    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=19)
+06:55:44.899    ← RX  [CCSDS RAW] 08 03 C0 13 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 31 2E 33 39 2C 31 38 33 2E 36 2C 31 39 2E 32 33
+06:55:44.902    ← RX  cmd_ack  apid=0x003 seq=19 → "'GPS:0.000000,0.000000,0.0,0,0,991.39,183.6,19.23"
+06:55:44.907    ✓ cmd_ack 
+07:00:36.344  SCK Ground Station ready.
+07:00:36.369  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+07:00:36.371  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+07:00:39.308  Board: SCK-2400 (CCSDS)
+07:00:42.102  Connected: COM12 @ 921600
+07:00:42.105  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+07:01:13.396    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=2)
+07:01:38.484    ✗ No reply
+07:01:41.694    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=3)
+07:02:06.683    ✗ No reply
+07:02:08.760    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+07:02:13.783    ✗ No telem reply
+07:02:19.201  SCK Ground Station ready.
+07:02:19.221  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+07:02:19.222  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+07:02:28.446  Connected: COM12 @ 921600
+07:02:30.357    → TX [0011]  get_telem  (seq=17)
+07:02:38.081  SCK Ground Station ready.
+07:02:38.120  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+07:02:38.123  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+07:02:40.814  Board: SCK-2400 (CCSDS)
+07:02:42.431  Connected: COM12 @ 921600
+07:02:42.434  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+07:02:50.602  Serial port closed.
+07:02:50.609  Connected: COM12 @ 921600
+07:02:50.610  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+07:02:58.538    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+07:03:03.599    ✗ No telem reply
+07:03:08.319    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x010
+07:03:08.353    ← RX  [CCSDS RAW] 08 01 C0 03 00 23 27 03 00 00 00 00 09 00 00 00 0C 00 00 00 00 00 00 00 5B 00 00 00 00 00 00 00 00 00 A6 04 B7 0C 00 11 00 0D
+07:03:08.356    ← RX  tlm_beacon  apid=0x001 seq=3
+07:03:08.366    ✓ tlm_beacon received seq=3 from 0x010
+07:03:14.486    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+07:03:19.483    ✗ No telem reply
+07:03:35.639    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+07:03:40.663    ✗ No telem reply
+07:03:56.662    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x011
+07:04:01.647    ✗ No telem reply
+07:04:03.390    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x011
+07:04:08.414    ✗ No telem reply
+07:04:28.130  COM ports refreshed. 4 port(s) found.
+07:04:30.919  Connected: COM8 @ 921600
+07:04:30.921  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+07:04:32.566    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x011
+07:04:32.595    ← RX  [CCSDS RAW] 08 01 C0 08 00 23 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A3 04 98 0C 01 11 00 00
+07:04:32.597    ← RX  tlm_beacon  apid=0x001 seq=8
+07:04:32.599    ✓ tlm_beacon received seq=8 from 0x011
+07:05:04.527  Connected: COM12 @ 921600
+07:05:04.529  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+07:05:10.163    → TX [0000]  [CCSDS] get_telem seq=9 dest=0x011
+07:05:12.197    ← RX  [CCSDS RAW] 08 01 C0 09 00 23 18 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C 03 11 00 00
+07:05:12.204    ← RX  tlm_beacon  apid=0x001 seq=9
+07:05:12.207    ✓ tlm_beacon received seq=9 from 0x011
+07:05:16.590    → TX [0000]  [CCSDS] get_telem seq=10 dest=0x011
+07:05:21.595    ✗ No telem reply
+07:05:23.158    → TX [0000]  [CCSDS] get_telem seq=11 dest=0x011
+07:05:24.687    ← RX  [CCSDS RAW] 08 01 C0 0B 00 23 24 00 00 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 03 11 00 00
+07:05:24.690    ← RX  tlm_beacon  apid=0x001 seq=11
+07:05:24.695    ✓ tlm_beacon received seq=11 from 0x011
+07:05:25.966    → TX [0000]  [CCSDS] get_telem seq=12 dest=0x011
+07:05:27.672    ← RX  [CCSDS RAW] 08 01 C0 0C 00 23 27 00 00 00 00 00 03 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C 03 11 00 00
+07:05:27.674    ← RX  tlm_beacon  apid=0x001 seq=12
+07:05:27.679    ✓ tlm_beacon received seq=12 from 0x011
+07:05:29.158    → TX [0000]  [CCSDS] get_telem seq=13 dest=0x011
+07:05:30.642    ← RX  [CCSDS RAW] 08 01 C0 0D 00 23 2A 00 00 00 00 00 04 00 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 97 0C 03 11 00 00
+07:05:30.644    ← RX  tlm_beacon  apid=0x001 seq=13
+07:05:30.648    ✓ tlm_beacon received seq=13 from 0x011
+07:05:37.079    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=14)
+07:05:38.367    ← RX  [CCSDS RAW] 08 03 C0 0E 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 31 2E 34 33 2C 31 38 33 2E 33 2C 31 39 2E 34 32
+07:05:38.369    ← RX  cmd_ack  apid=0x003 seq=14 → "'GPS:0.000000,0.000000,0.0,0,0,991.43,183.3,19.42"
+07:05:38.380    ✓ cmd_ack 
+07:05:42.406    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=15)
+07:05:44.202    ← RX  [CCSDS RAW] 08 03 C0 0F 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 31 2E 34 33 2C 31 38 33 2E 32 2C 31 39 2E 34 32
+07:05:44.205    ← RX  cmd_ack  apid=0x003 seq=15 → "'GPS:0.000000,0.000000,0.0,0,0,991.43,183.2,19.42"
+07:05:44.216    ✓ cmd_ack 
+07:06:16.452    → TX [0000]  [CCSDS] get_telem seq=16 dest=0x011
+07:06:17.599    ← RX  [CCSDS RAW] 08 01 C0 10 00 23 59 00 00 00 00 00 07 00 00 00 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 95 0C 03 11 00 01
+07:06:17.606    ← RX  tlm_beacon  apid=0x001 seq=16
+07:06:17.611    ✓ tlm_beacon received seq=16 from 0x011
+07:06:22.910    → TX [0000]  [CCSDS] get_telem seq=17 dest=0x011
+07:06:27.912    ✗ No reply to get_telem
+07:06:30.646    → TX [0000]  [CCSDS] get_telem seq=18 dest=0x011
+07:06:32.009    ← RX  [CCSDS RAW] 08 01 C0 12 00 23 68 00 00 00 00 00 09 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 97 0C 03 11 00 01
+07:06:32.023    ← RX  tlm_beacon  apid=0x001 seq=18
+07:06:32.026    ✓ tlm_beacon received seq=18 from 0x011
+07:13:39.385  SCK Ground Station ready.
+07:13:39.411  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+07:13:39.412  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+07:14:01.236  Connected: COM12 @ 921600
+07:14:07.858  Board: SCK-2400 (CCSDS)
+07:14:13.691    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+07:14:18.703    ✗ No telem reply
+07:14:20.317    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+07:14:25.303    ✗ No telem reply
+07:14:26.518    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+07:14:31.518    ✗ No telem reply
+07:14:41.559  SCK Ground Station ready.
+07:14:41.591  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+07:14:41.593  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+07:14:44.931  Board: SCK-2400 (CCSDS)
+07:14:49.204  Connected: COM12 @ 921600
+07:14:49.206  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+07:14:59.024    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+07:15:04.036    ✗ No telem reply
+07:15:04.924    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+07:15:09.918    ✗ No telem reply
+07:15:11.876    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+07:15:16.867    ✗ No telem reply
+07:15:17.484    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+07:15:22.485    ✗ No telem reply
+08:44:10.860    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x011
+08:44:16.032    ✗ No telem reply
+08:44:24.193  SCK Ground Station ready.
+08:44:24.220  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+08:44:24.221  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+08:44:27.818  Board: SCK-2400 (CCSDS)
+08:44:30.355  Connected: COM12 @ 921600
+08:44:30.358  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+08:44:32.663    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+08:44:37.667    ✗ No telem reply
+08:44:39.724    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+08:44:44.733    ✗ No telem reply
+08:44:57.044    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+08:45:02.032    ✗ No telem reply
+08:45:02.692    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+08:45:07.716    ✗ No telem reply
+08:45:15.942  Serial port closed.
+08:45:15.949  Connected: COM12 @ 921600
+08:45:15.951  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+08:45:16.653  Serial port closed.
+08:45:16.660  Connected: COM12 @ 921600
+08:45:16.662  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+08:45:19.075    → TX [0000]  [CCSDS] get_telem seq=6 dest=0x010
+08:45:19.162    ✓ tlm_beacon received seq=6 from 0x010
+08:45:19.169    ← RX  [CCSDS RAW] 08 01 C0 06 00 23 88 17 00 00 00 00 08 00 00 00 16 00 00 00 00 00 00 00 A1 00 00 00 00 00 00 00 00 00 A7 04 B8 0C 00 11 00 64
+08:45:19.171    ← RX  tlm_beacon  apid=0x001 seq=6
+08:45:26.003    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x011
+08:45:30.998    ✗ No telem reply
+08:45:32.724    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x011
+08:45:37.730    ✗ No telem reply
+08:45:38.796    → TX [0000]  [CCSDS] get_telem seq=9 dest=0x011
+08:45:47.325  SCK Ground Station ready.
+08:45:47.353  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+08:45:47.355  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+08:45:49.770  Board: SCK-2400 (CCSDS)
+08:45:55.802  Connected: COM12 @ 921600
+08:45:55.805  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+08:46:06.167    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x011
+08:46:11.162    ✗ No telem reply
+08:46:12.931    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+08:46:17.981    ✗ No telem reply
+08:46:37.307    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+08:46:42.414    ✗ No telem reply
+08:47:17.096    → TX [0000]  [CCSDS] get_telem seq=5 dest=0x011
+08:47:22.128    ✗ No telem reply
+08:47:28.004    → TX [0011]  [CUSTOM] PICO Ping  opcode=0x20  (seq=6)
+08:47:53.045    ✗ No reply
+08:48:03.091  Not connected.
+08:48:05.018  Connected: COM12 @ 921600
+08:48:05.022  Physical board APID captured: 0x011 -- RF crypto active for remote APIDs
+08:48:07.779    → TX [0000]  [CCSDS] get_telem seq=7 dest=0x011
+08:48:08.968    ← RX  [CCSDS RAW] 08 01 C0 07 00 23 64 00 00 00 00 00 03 00 00 00 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 97 0C 02 11 00 01
+08:48:08.972    ← RX  tlm_beacon  apid=0x001 seq=7
+08:48:08.979    ✓ tlm_beacon received seq=7 from 0x011
+08:48:25.907    → TX [0000]  [CCSDS] get_telem seq=8 dest=0x011
+08:48:27.150    ← RX  [CCSDS RAW] 08 01 C0 08 00 23 76 00 00 00 00 00 04 00 00 00 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 02 11 00 01
+08:48:27.151    ← RX  tlm_beacon  apid=0x001 seq=8
+08:48:27.161    ✓ tlm_beacon received seq=8 from 0x011
+08:48:37.802    → TX [0011]  [CUSTOM] PICO Ping  opcode=0x20  (seq=9)
+08:48:39.645    ← RX  [CCSDS RAW] 08 03 C0 09 00 09 20 00 50 49 43 4F 3A 41 43 4B
+08:48:39.651    ← RX  cmd_ack  apid=0x003 seq=9 → " PICO:ACK"
+08:48:39.660    ✓ cmd_ack 
+08:48:45.787    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=10)
+08:49:10.831    ✗ No reply
+08:49:27.533  Serial port closed.
+08:49:27.542  Connected: COM12 @ 921600
+08:49:27.544  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+08:49:31.155    → TX [0000]  [CCSDS] get_telem seq=11 dest=0x010
+08:49:31.183    ← RX  [CCSDS RAW] 08 01 C0 0B 00 23 5C 00 00 00 00 00 03 00 00 00 04 00 00 00 00 00 00 00 23 00 00 00 00 00 00 00 00 00 A9 04 B9 0C 01 11 00 01
+08:49:31.277    ← RX  tlm_beacon  apid=0x001 seq=11
+08:49:31.280    ✓ tlm_beacon received seq=11 from 0x010
+08:49:37.683    → TX [0000]  [CCSDS] get_telem seq=12 dest=0x011
+08:49:42.710    ✗ No telem reply
+09:05:05.621  Serial port closed.
+09:05:05.632  Connected: COM12 @ 921600
+09:05:05.634  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+09:05:18.279    → TX [0000]  [CCSDS] get_telem seq=13 dest=0x011
+09:05:20.246    ← RX  [CCSDS RAW] 08 01 C0 0D 00 23 6C 04 00 00 00 00 08 00 00 00 07 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C 00 11 00 12
+09:05:20.250    ← RX  tlm_beacon  apid=0x001 seq=13
+09:05:20.259    ✓ tlm_beacon received seq=13 from 0x011
+09:05:27.664    → TX [0000]  [CCSDS] get_telem seq=14 dest=0x011
+09:05:28.923    ← RX  [CCSDS RAW] 08 01 C0 0E 00 23 74 04 00 00 00 00 09 00 00 00 08 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C 00 11 00 13
+09:05:28.924    ← RX  tlm_beacon  apid=0x001 seq=14
+09:05:28.926    ✓ tlm_beacon received seq=14 from 0x011
+09:05:40.231    → TX [0011]  [CUSTOM] PICO Get GPS  opcode=0x27  (seq=15)
+09:05:41.414    ← RX  [CCSDS RAW] 08 03 C0 0F 00 31 27 00 47 50 53 3A 30 2E 30 30 30 30 30 30 2C 30 2E 30 30 30 30 30 30 2C 30 2E 30 2C 30 2C 30 2C 39 39 32 2E 34 31 2C 31 37 35 2E 30 2C 31 39 2E 36 36
+09:05:41.415    ← RX  cmd_ack  apid=0x003 seq=15 → "'GPS:0.000000,0.000000,0.0,0,0,992.41,175.0,19.66"
+09:05:41.423    ✓ cmd_ack 
+09:12:38.165  SCK Ground Station ready.
+09:12:38.184  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+09:12:38.186  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+09:12:53.773  Connected: COM12 @ 921600
+10:44:53.119  SCK Ground Station ready.
+10:44:53.141  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+10:44:53.143  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+10:45:05.142  Connected: COM12 @ 921600
+10:45:45.326    → TX [0010]  get_telem  (seq=17)
+10:45:50.321    ✗ No telem reply
+10:45:52.741  Serial port closed.
+10:45:52.748  Connected: COM12 @ 921600
+10:46:00.423  Serial port closed.
+10:46:00.430  Connected: COM12 @ 921600
+10:46:09.163  SCK Ground Station ready.
+10:46:09.188  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Log
+10:46:09.191  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Debug\net8.0-windows\Flights
+10:46:11.699  Board: SCK-2400 (CCSDS)
+10:46:15.260  Connected: COM12 @ 921600
+10:46:15.263  Physical board APID captured: 0x010 -- RF crypto active for remote APIDs
+10:46:23.704    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x010
+10:46:28.703    ✗ No telem reply
+10:46:40.485    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x010
+10:46:40.520    ← RX  [CCSDS RAW] 08 01 C0 03 00 23 D1 1B 00 00 00 00 06 00 00 00 08 00 00 00 00 00 00 00 46 00 00 00 00 00 00 00 00 00 A8 04 BB 0C 00 11 00 76
+10:46:40.525    ← RX  tlm_beacon  apid=0x001 seq=3
+10:46:40.537    ✓ tlm_beacon received seq=3 from 0x010

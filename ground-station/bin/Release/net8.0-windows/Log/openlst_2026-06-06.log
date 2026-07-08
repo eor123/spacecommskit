@@ -1,0 +1,17 @@
+20:13:25.731  SCK Ground Station ready.
+20:13:25.768  Log folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Log
+20:13:25.770  Flights folder: C:\Users\maxor\source\repos\2022_projects\OpenLST_GroundStation\bin\Release\net8.0-windows\Flights
+20:13:31.428  Board: SCK-2400 (CCSDS)
+20:13:36.391  Connected: COM12 @ 921600
+20:13:40.835    → TX [0000]  [CCSDS] get_telem seq=2 dest=0x010
+20:13:40.873    ← RX  [CCSDS RAW] 08 01 C0 02 00 1F 2F 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 00 00 00 00 00 00 00 00 00 A9 04 B7 0C
+20:13:40.877    ← RX  tlm_beacon  apid=0x001 seq=2
+20:13:40.885    ✓ tlm_beacon received seq=2
+20:13:47.030    → TX [0000]  [CCSDS] get_telem seq=3 dest=0x011
+20:13:49.351    ← RX  [CCSDS RAW] 08 01 C0 03 00 1F 5A 00 00 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A2 04 96 0C
+20:13:49.353    ← RX  tlm_beacon  apid=0x001 seq=3
+20:13:49.361    ✓ tlm_beacon received seq=3
+20:13:56.111    → TX [0000]  [CCSDS] get_telem seq=4 dest=0x011
+20:13:58.537    ← RX  [CCSDS RAW] 08 01 C0 04 00 1F 63 00 00 00 00 00 02 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 A1 04 96 0C
+20:13:58.578    ← RX  tlm_beacon  apid=0x001 seq=4
+20:13:58.580    ✓ tlm_beacon received seq=4

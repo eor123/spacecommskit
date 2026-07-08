@@ -1,6 +1,6 @@
 # SpaceCommsKit SCK-2400 Developer Guide
 
-**Version 1.00 — June 2026**
+**Version 1.10 — July 2026**
 **SpaceCommsKit — https://spacecommskit.com/docs**
 
 > This document covers the SCK-2400 development stack — from the CCSDS
@@ -35,6 +35,9 @@ relevant section:
 | `SCK-DEV: RESPONSE_FORMAT` | Pico response string conventions | 3.5 |
 | `SCK-DEV: BEACON` | Autonomous GPS beacon | 3.6 |
 | `SCK-DEV: SD_FLIGHT_LOG` | SD card flight log format | 3.7 |
+| `SCK-DEV: WATCHDOG` | Hardware watchdog timer — LEO fault recovery | 3.8 |
+| `SCK-DEV: CRYPTO` | AES-128-CCM RF encryption | 3.9 |
+| `SCK-DEV: NV_STORAGE` | Non-volatile reset counter / safe mode | 3.10 |
 
 ---
 
@@ -71,18 +74,18 @@ talking to a CC1110 (SCK-915) or a CC1352P (SCK-2400).
 
 | Board | Description | Status |
 |-------|-------------|--------|
-| LAUNCHXL-CC1352P-2 ×2 | TI LaunchPad development boards | Dev/test — current bringup hardware |
-| SCK-2400 Dev (production) | CC2652P1FRGZ, SCK-915 footprint — drop-in for existing 3D-printed stands and SCK-PBL-1 | Planned — design largely complete |
-| SCK-2400 CubeSat (production) | CC2652P1FRGZ, RF sections only, PC-104 compliant | Planned — design largely complete |
+| LAUNCHXL-CC1352P-2 ×2 | TI LaunchPad — bringup validation platform | Firmware validated here before custom PCB spin |
+| SCK-2400 Mini | CC2652P1FRGZ, SCK-915 footprint — drop-in for existing 3D-printed stands and SCK-PBL-1 | In production |
+| SCK-2400 | CC2652P1FRGZ, RF sections only, PC-104 compliant | In design |
 | SCK-PBL-1 Payload | Pico + camera + GPS + altimeter + SD PCB | Shared with SCK-915 |
 
 > Both production variants share identical firmware to what's being bringup-tested
-> on LAUNCHXL-CC1352P-2 in this guide — the CC1352P and CC2652P are
+> on SCK-2400 Mini in this guide — the CC1352P and CC2652P are
 > pin/peripheral-compatible within the SimpleLink family, so the CCSDS dispatch,
 > OAD transport, and payload bridge code carries forward unchanged. The
-> **SCK-2400 Dev variant** is a footprint-compatible drop-in replacement for
+> **SCK-2400 Mini variant** is a footprint-compatible drop-in replacement for
 > SCK-915 — same mounting, same payload board connector — intended for
-> development work and HAB missions. The **SCK-2400 CubeSat variant** strips the
+> development work and HAB missions. The **SCK-2400 variant** strips the
 > board to RF sections only on a PC-104 compliant form factor, for integration
 > into real CubeSat flight stacks.
 
@@ -250,6 +253,37 @@ OAD writes the new application image to **external flash** (MX25R8035F,
 image to internal flash, and the new firmware runs.
 
 See Section 3.2 for the full OAD streaming protocol.
+
+### 2.5 Programming / Debug Connector (J2)
+
+The SCK-2400 Mini carries a **2×5 (10-pin), 0.05" pitch programming/debug
+header (J2)**, matching the standard **TI LaunchPad XDS110 debug-out**
+pinout used on LAUNCHXL-CC1352P-2 boards. It allows an external XDS110
+(including a LaunchPad's onboard XDS110 in pass-through mode) to
+program/debug boards that don't carry their own onboard debug probe.
+
+> **This is not a JTAG connector**, despite two of its signal labels
+> (`TCKC`, `TMSC`) being inherited from the CC1352P pin-naming in TI's
+> pinout tool. Those names describe SWD-capable pins on the die, not a
+> JTAG-standard header pinout. Refer to J2 as the **Programming/Debug
+> connector** or **XDS110 debug header** in documentation and silkscreen
+> — not "JTAG."
+
+| Pin | Signal |
+|-----|--------|
+| 1 | U1-Reset_N |
+| 2 | GND |
+| 3 | U1-DIO_17 |
+| 4 | GND |
+| 5 | U1-DIO_16 |
+| 6 | +3V3 |
+| 7 | U1-JTAG_TCKC |
+| 8 | GND |
+| 9 | U1-JTAG_TMSC |
+| 10 | +3V3 |
+
+A standard 10-pin ribbon cable from any LaunchPad's debug-out header
+plugs directly into J2 for external programming/debug.
 
 ---
 
@@ -542,6 +576,158 @@ in `main.py` is identical.
 
 ---
 
+### 3.8 Watchdog Timer — LEO Fault Recovery [SCK-DEV: WATCHDOG]
+
+The CC1352P hardware watchdog resets the board if any task deadlocks or
+spins without yielding. This is the primary fault recovery mechanism for
+LEO missions where hands-on recovery is impossible.
+
+**Architecture:**
+
+```
+rfTask       (priority 2) ─┐
+uartTask     (priority 2) ─┤── if any spin → watchdogTask starved
+watchdogTask (priority 1) ─┘   → WDT expires → CC1352P reset (~65s)
+```
+
+`watchdogTask` runs at the lowest RTOS priority (1). Starvation IS the
+detection mechanism — no explicit hang detection is required.
+
+**SysConfig (`sck2400.syscfg`):** Add `CONFIG_WATCHDOG_0` under
+TI Drivers → Watchdog. Period: `30000` ms. Peripheral: `Any(WDT0)`.
+
+**Implementation (`main.c`):**
+
+```c
+// In mainThread() after SPI_init():
+Watchdog_init();
+
+void watchdogTask(UArg a0, UArg a1)
+{
+    Watchdog_Params p;
+    Watchdog_Params_init(&p);
+    p.resetMode     = Watchdog_RESET_ON;
+    p.debugStallMode = Watchdog_DEBUG_STALL_ON;
+    Watchdog_Handle h = Watchdog_open(CONFIG_WATCHDOG_0, &p);
+
+    // CRITICAL: CC1352P watchdog stops in standby without this.
+    Power_setConstraint(PowerCC26XX_DISALLOW_STANDBY);
+
+    while (1)
+    {
+        Watchdog_clear(h);   // kick every 10s within 30s window
+        Task_sleep(10000);    // yields — starvation is the detection
+    }
+}
+```
+
+**CC1352P two-timeout reset:** The CC1352P fires an NMI on the first
+timeout and only resets on the second timeout with the flag still
+pending. Total time from hang to reset is **~65 seconds** at a 30-second
+period — factor this into test timing.
+
+**Debug stall:** With `Watchdog_DEBUG_STALL_ON`, any JTAG connection
+(including a background CCS connection) pauses the watchdog hardware.
+Disconnect JTAG after flashing for watchdog testing.
+
+**Verified:** uart_task deliberate spin → LED went dark (watchdogTask
+starved) → board reset at ~65s → post-reset `get_telem` nominal. ✓
+
+**Configuration summary:**
+
+| Parameter | Value |
+|-----------|-------|
+| Timeout | 30,000 ms (30 seconds) |
+| Kick interval | 10,000 ms via `Task_sleep(10000)` |
+| Reset mode | `Watchdog_RESET_ON` |
+| Debug stall | `Watchdog_DEBUG_STALL_ON` |
+| Power constraint | `PowerCC26XX_DISALLOW_STANDBY` |
+| Task priority | 1 (lowest) |
+| Task stack | 512 bytes |
+
+---
+
+### 3.9 RF Encryption (AES-128-CCM) [SCK-DEV: CRYPTO]
+
+All RF communication uses AES-128-CCM per-packet encryption and
+authentication. Implementation is in `crypto.c` — pure C, RFC 3610,
+no TI hardware accelerator.
+
+**Why software AES:** The TI AESCCM hardware driver cannot be safely
+called from rfTask context (semaphore poisoning) and produces different
+keystream than .NET `AesCcm`. Software AES is task-context safe and
+matches .NET exactly.
+
+**Wire format:**
+```
+[CCSDS Header 6B][Nonce 13B][Encrypted Payload N bytes][MAC 8B]
+```
+
+**CCM parameters:**
+
+| Parameter | Value |
+|-----------|-------|
+| Algorithm | AES-128-CCM (RFC 3610) |
+| Key length | 16 bytes |
+| Nonce length | 13 bytes (from CCSDS seq counter, zero-padded) |
+| MAC length | 8 bytes |
+| Keys per pair | 3 (Option A fallback) |
+| Overhead | 21 bytes per packet |
+
+**Key provisioning:** Three keys per board pair. Generated in the Ground
+Station Provision tab (🎲 Roll). Automatically patched into `security.h`
+before each build. `security.h` is gitignored — never committed.
+
+**Self-test on every boot:** `crypto_init()` verifies a known test vector.
+6 fast LED blinks if it fails. The board continues but crypto is broken.
+
+**Known test vector:**
+```
+Key: 0xFF×16  Nonce: 0x00×11+0xC0+0x07  AAD: 18 11 C0 07 00 15
+Plaintext: 0x01  →  Ciphertext: 0x83  MAC: 85 84 6C 8D 8C 2A 0B 19
+```
+
+**Task context:** `crypto_decrypt()` and `crypto_encrypt()` are safe to
+call from rfTask — pure C, no hardware dependencies. All decrypt →
+dispatch → encrypt happens inline in rfTask with no cross-task handoff.
+
+---
+
+### 3.10 Non-Volatile Storage — Reset Counter and Safe Mode [SCK-DEV: NV_STORAGE]
+
+Non-volatile reset counter in internal flash at `0x52000` (8KB, pages
+82-83). Five consecutive non-power-on resets without a 5-minute clean
+run triggers safe mode (beacon only).
+
+**Flash layout:**
+```
+0x00000–0x03FFF  BIM (pages 0-3)
+0x04000–0x51FFF  Application (0x4E000 bytes)
+0x52000–0x53FFF  NVS region (pages 82-83, 8KB)  ← reset counter lives here
+0x54000–0x55FFF  Reserved
+0x56000–0x57FFF  CCFG
+```
+
+**Why direct flash (not TI NVS driver):** `NVS_write()` returns success
+and `NVS_WRITE_POST_VERIFY` passes (reading from write buffer), but data
+does not survive reset. Fix: `FlashSectorErase()` + `FlashProgram()` +
+`FlashCheckFsmForReady()` polling + `Power_setConstraint(PowerCC26XX_DISALLOW_STANDBY)`
++ VIMS cache disable around all flash operations.
+
+**Deferred write:** `nv_storage_on_boot()` is called from `watchdogTask`
+after a 10-second `Task_sleep()`. Use `Task_sleep()` not `usleep()` —
+`usleep()` busy-spins on TI-RTOS7 and causes the clean-run timer to fire
+immediately, resetting the counter to 0.
+
+**Reset cause gating:** NVS operations run on `SYSRESET`, `WARMRESET`,
+and `PIN`. Power-on is excluded to avoid NVS hangs on cold start. On the
+LaunchPad, `CMD_REBOOT` asserts `RSTSRC_PIN_RESET` (not SYSRESET).
+
+**Bench caveat:** XDS110 debugger erases NVS on every software reset.
+Test NVS persistence with real power cycles (unplug/replug) on the bench.
+
+---
+
 ## 4.0 Payload Board Hardware Reference
 
 The SCK-PBL-1 payload board (Pico + camera + GPS + altimeter + SD) is
@@ -603,15 +789,24 @@ if (pkt.PicoPayload.StartsWith("GPS:"))
 |--------|------|-------------|
 | 0x01 | `CMD_GET_TELEM` | Request telemetry — response via `tlm_beacon` (APID 0x001) |
 | 0x02 | `CMD_REBOOT` | Reboot the addressed board |
+| 0x03 | `CMD_GET_CALLSIGN` | Request callsign string |
 | 0x04 | `CMD_BEACON_CTRL` | Enable/disable the board's own RF beacon |
+| 0x05 | `CMD_CLEAR_SAFE_MODE` | Reset NVS reset counter and exit safe mode |
+| 0x06 | `CMD_GET_TIME` | Request board time |
 | 0x10 | `CMD_OAD_START` | Begin OAD session |
 | 0x11 | `CMD_OAD_CHUNK` | Stream one firmware chunk |
 | 0x12 | `CMD_OAD_END` | Finalize, verify CRC, reboot |
 | 0x13 | `CMD_OAD_ABORT` | Cancel OAD session |
 | 0x14 | `CMD_OAD_STATUS` | Query OAD progress |
-| 0x20–0x29 | `CMD_PICO_*` / `CMD_GET_GPS` / `CMD_GET_BARO` | Payload board bridge — see Section 3.5 |
+| 0x20 | `CMD_PICO_PING` | Payload bridge — Pico ping |
+| 0x21 | `CMD_PICO_TEMP` | Payload bridge — temperature |
+| 0x22 | `CMD_PICO_SNAP` | Payload bridge — camera snapshot |
+| 0x23 | `CMD_PICO_LIST` | Payload bridge — list SD files |
+| 0x27 | `CMD_GET_GPS` | GPS+baro fused — response in `cmd_ack` payload as `GPS:lat,lon,alt,sats,fix,hpa,baro_alt,temp_c` |
+| 0x28 | `CMD_GET_BARO` | Barometric only — response as `BARO:hpa,baro_alt,temp_c` |
+| 0x29 | `CMD_PICO_BEACON` | Payload beacon on/off |
 | `CCSDS_APID_TLM_BEACON` (0x001) | — | Telemetry beacon responses |
-| `CCSDS_APID_CMD_ACK` (0x003) | — | All command acknowledgements |
+| `CCSDS_APID_CMD_ACK` (0x003) | — | All command acknowledgements (including GPS/baro strings) |
 
 ---
 
@@ -707,8 +902,67 @@ shared). Each one cost real debugging time.
 | L14 | The Ground Station's HEX File path does not always follow Project Dir changes — verify before flashing to a custom build location | Medium |
 | L15 | BIM is permanent and never updated by application builds or OAD — a corrupted OAD image is simply never copied, and the board boots the last good internal-flash image | High (safety property) |
 | L16 | Always Clean + Build after modifying `ccsds.h`, `uart.h`, or `.syscfg` — incremental builds can silently link stale generated headers | High |
+| L17 | CC1352P watchdog clock stops when the device enters standby — `Power_setConstraint(PowerCC26XX_DISALLOW_STANDBY)` is mandatory or the timer never fires on a real hang | Critical |
+| L18 | CC1352P watchdog does not reset on the first timeout — it fires an NMI first; reset only occurs if the flag is still pending at the second timeout. Total time from hang to reset is ~65s at a 30s period | High |
+| L19 | `Watchdog_open()` returns NULL if `Watchdog_init()` was not called first in `mainThread()` — same init pattern required as `SPI_init()` | High |
+| L20 | With CCS JTAG connected (even background connection without active debug session), `Watchdog_DEBUG_STALL_ON` pauses the watchdog hardware — the timer never fires. Disconnect JTAG after flash for watchdog testing | High |
+| L21 | `reloadValue` passed to the TI Watchdog driver is in milliseconds — the driver calls `convertMsToTicks()` internally. 30000 = 30 seconds | High |
+| L22 | TI AESCCM hardware driver produces different keystream than .NET `AesCcm` for identical inputs — use software AES (RFC 3610 pure C). The hardware driver also causes semaphore poisoning from rfTask context | Critical |
+| L23 | AES ShiftRows operates on rows of the column-major state: row 3 indices [3,7,11,15] shift left 3 → `b[3],b[7],b[11],b[15] = b[15],b[3],b[7],b[11]`. Wrong ShiftRows produces incorrect keystream that passes basic tests but mismatches .NET | Critical |
+| L24 | Moving crypto to uart_task required `UART2_Mode_NONBLOCKING`, which allocates a ring buffer from the BIOS heap at `UART2_open()` time, exhausting the heap and causing `RF_open()` to return NULL (solid LED at boot). Software AES in rfTask eliminates all cross-task crypto issues | Critical |
+| L25 | `SysCtrlSystemReset()` (CMD_REBOOT) asserts `RSTSRC_PIN_RESET` on the LaunchPad XDS110 — not `RSTSRC_SYSRESET`. The NVS gate must include `SCK_RESET_CAUSE_PIN` or CMD_REBOOT never increments the reset counter | High |
+| L26 | `usleep()` busy-spins on TI-RTOS7 — in watchdogTask, `usleep(10000000)` completes in microseconds, causing `cleanRunAccumMs` to hit 300000ms almost instantly and fire `nv_storage_on_clean_run()` right after `nv_storage_on_boot()`. Use `Task_sleep(10000)` | Critical |
+| L27 | TI `NVS_write()` returns success and `NVS_WRITE_POST_VERIFY` passes (reading from write buffer), but data does not survive reset. Use direct `FlashSectorErase()` + `FlashProgram()` + `FlashCheckFsmForReady()` + `Power_setConstraint` + VIMS cache disable | Critical |
+| L28 | NVS `regionSize` must be a multiple of 8192 bytes — any other size causes the linker to place `flashBuf0` at 0x0000 (BIM flash) via a synthetic `$BOUND$0x0` region. Every write then corrupts BIM | Critical |
+| L29 | NVS `regionBase` in SysConfig must match `NVS_BASE` in the linker command file. The OAD image length filter in the GS app must exclude the NVS section (`origin < 0x52000`) — otherwise BIM erases NVS on every OAD boot | Critical |
+| L30 | XDS110 debugger erases NVS flash on every software reset (CMD_REBOOT) on the bench. Test NVS persistence with real power cycles — unplug/replug USB | High |
 
 ---
 
-*SpaceCommsKit SCK-2400 Developer Guide v1.00*
+## 8.0 Ground Station — SCK-2400 Integration Notes
+
+### 8.1 Build-Time Patching
+
+Every SCK-2400 build automatically patches four files before compiling:
+
+| File | What's patched |
+|------|----------------|
+| `ccsds.h` | `SCK_APID_THIS_BOARD` — board APID |
+| `radio.h` | `TX_POWER` — bench (0 dBm) or max (+20 dBm) |
+| `security.h` | `SCK_AES_KEY_0/1/2` — 3 × 16-byte AES keys from Provision tab |
+| `oad_image_header_app.c` | `.prgEntry` and `.len` — OAD image length, capped at `origin < 0x52000` to exclude NVS |
+
+### 8.2 Encryption in C#
+
+C# sends and receives plaintext CCSDS over USB. All encryption lives in
+firmware. `CcsdsProtocol.cs` has no AES dependency. Keys never exist in
+the C# process — they are patched into `security.h` at build time only.
+
+### 8.3 GPS Response Routing
+
+`CMD_GET_GPS` (0x27) returns its GPS string in a `cmd_ack` (APID 0x003)
+payload. The payload begins with the opcode byte (`0x27` = ASCII `'`)
+followed by `GPS:lat,lon,...`. Use `IndexOf("GPS:")` not `StartsWith` to
+locate the string. The GPS/Map tab polls automatically every 10 seconds.
+
+### 8.4 Board-Aware UI
+
+Register board-specific controls in `_sck2400OnlyControls` or
+`_sck915OnlyControls` during `Build*()` methods. `ApplyBoardUi()` greys
+them out and sets tooltips ("SCK-2400 only" / "SCK-915 only").
+Called on startup and on board dropdown change.
+
+### 8.5 RF Crypto Status Indicator
+
+`lblRfStatus` on the Home tab shows:
+```
+GS: 0x010  RF → 0x011 encrypted
+```
+Updated by `UpdateRfStatusLabel()` on connect, disconnect, and board
+dropdown change. Primary indicator for diagnosing the most common setup
+mistake — having the wrong board physically connected.
+
+---
+
+*SpaceCommsKit SCK-2400 Developer Guide v1.10*
 *For updates and latest version see https://spacecommskit.com/docs*

@@ -162,6 +162,14 @@ namespace OpenLstGroundStation
         private readonly ConcurrentQueue<RxPacket> _rxQueue = new();
         private ushort IncSeqNum() => _seqNum = OpenLstProtocol.IncSeqNum(_seqNum);
 
+        // ── SCK-2400 board type selector ───────────────────────────────
+        private enum BoardType { SCK915, SCK2400 }
+        private BoardType _boardType     = BoardType.SCK915;
+        private ushort    _ccsdsSeqCount    = CcsdsProtocol.SEQCOUNT_MIN;
+        private ushort    _physicalBoardApid = 0;  // APID of board physically on USB; gates RF crypto
+        private ushort IncCcsdsSeqCount()
+            => _ccsdsSeqCount = CcsdsProtocol.IncSeqCount(_ccsdsSeqCount);
+
         private ushort ActiveHwid
         {
             get
@@ -192,9 +200,11 @@ namespace OpenLstGroundStation
         private TextBox     txtHwid     = null!;
         private Button      btnConnect  = null!;
         private Label       lblStatus   = null!;
+        private Label       lblRfStatus = null!;  // shows physical board + RF crypto state
         private RichTextBox rtbLog      = null!;
         private Button      btnClearLog = null!;
         private Button      btnLiveLog  = null!;
+        private bool        _filterBeacon = false;
         private TabControl  tabMain     = null!;
 
         // ── Tab pages ─────────────────────────────────────────────────────
@@ -214,6 +224,8 @@ namespace OpenLstGroundStation
         private Label lblUptime       = null!;
         private Label lblRssi         = null!;
         private Label lblLqi          = null!;
+        private Label lblDieTemp      = null!;
+        private Label lblSupplyV      = null!;
         private Label lblPktsGood     = null!;
         private Label lblPktsSent     = null!;
         private Label lblRejCksum     = null!;
@@ -223,6 +235,11 @@ namespace OpenLstGroundStation
         private Label lblRxMode       = null!;
         private Label lblTxMode       = null!;
         private Label lblTelemAge     = null!;
+        // LEO fault recovery labels (Session 13)
+        private Label lblResetCounter = null!;
+        private Label lblResetCause   = null!;
+        private Label lblSafeMode     = null!;
+        private Label lblUptimeMin    = null!;
         private Button btnGetTelemNow = null!;
         private Button btnTelemAuto   = null!;
 
@@ -231,6 +248,10 @@ namespace OpenLstGroundStation
         // ══════════════════════════════════════════════════════════════════
         private TextBox txtCallsign = null!;
         private TextBox txtRawCmd   = null!;
+        private TextBox txtOadHexPath = null!;
+        private Label   lblOadProgress = null!;
+        private CancellationTokenSource? _oadCts = null;
+        private ComboBox cmbOadDelay = null!;
 
         // ══════════════════════════════════════════════════════════════════
         //  FIRMWARE TAB CONTROLS
@@ -251,6 +272,14 @@ namespace OpenLstGroundStation
         // RF Power Mode — 0 = bench (0dBm), 1 = field (max)
         private RadioButton rbPowerBench    = null!;
         private RadioButton rbPowerField    = null!;
+        // SCK-2400 board role selector — GS or Remote, sets SCK_APID_THIS_BOARD at build time
+        private ComboBox    cmbBoardRole    = null!;
+        private Panel       _provInstrPanel  = null!;
+
+        // Controls greyed out based on board type.
+        // Populated in Build* methods, applied in ApplyBoardUi().
+        private readonly List<Control> _sck2400OnlyControls = new();
+        private readonly List<Control> _sck915OnlyControls  = new();
 
         // ══════════════════════════════════════════════════════════════════
         //  RF QA TAB CONTROLS
@@ -453,15 +482,23 @@ namespace OpenLstGroundStation
             {
                 var d = new Dictionary<string, string>
                 {
-                    ["ProjectDir"]   = txtProjectDir?.Text  ?? "",
-                    ["FirmwareFile"] = txtFirmwareFile?.Text ?? "",
-                    ["AesKey"]       = txtAesKey?.Text       ?? "",
-                    ["LastPort"]     = cmbPort?.SelectedItem?.ToString() ?? "",
-                    ["LastBaud"]     = cmbBaud?.SelectedItem?.ToString() ?? "",
-                    ["LastHwid"]     = txtHwid?.Text         ?? "",
-                    ["SmartRFPath"]  = _smartRfPath,
-                    ["RtlPowerPath"] = _rtlPowerPath,
-                    ["QaPpm"]        = _qaPpm.ToString(),
+                    ["ProjectDir"]       = txtProjectDir?.Text  ?? "",
+                    ["FirmwareFile"]     = txtFirmwareFile?.Text ?? "",
+                    ["AesKey"]           = txtAesKey?.Text       ?? "",
+                    ["LastPort"]         = cmbPort?.SelectedItem?.ToString() ?? "",
+                    ["LastBaud"]         = cmbBaud?.SelectedItem?.ToString() ?? "",
+                    ["LastHwid"]         = txtHwid?.Text         ?? "",
+                    ["SmartRFPath"]      = _smartRfPath,
+                    ["RtlPowerPath"]     = _rtlPowerPath,
+                    ["QaPpm"]            = _qaPpm.ToString(),
+                    ["BoardRole"]        = (cmbBoardRole?.SelectedIndex ?? 0).ToString(),
+                    ["Sck2400CcsServer"] = _sck2400CcsServer,
+                    ["Sck2400SrfProg"]   = _sck2400SrfProg,
+                    ["Sck2400Workspace"] = _sck2400Workspace,
+                    ["Sck2400XdsDfu"]    = _sck2400XdsDfu,
+                    ["ProvKey0"]         = txtProvKey0?.Text ?? "",
+                    ["ProvKey1"]         = txtProvKey1?.Text ?? "",
+                    ["ProvKey2"]         = txtProvKey2?.Text ?? "",
                 };
                 var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
                 File.WriteAllText(SettingsPath,
@@ -503,6 +540,8 @@ namespace OpenLstGroundStation
             BuildLogPanel();
             WireTimers();
 
+            ApplyBoardUi();  // apply initial board-specific UI state
+
             var s = LoadSettings();
             if (s.TryGetValue("ProjectDir",   out string? pd) && Directory.Exists(pd))
                 txtProjectDir.Text = pd;
@@ -514,14 +553,31 @@ namespace OpenLstGroundStation
                 cmbPort.SelectedItem = lp;
             if (s.TryGetValue("LastBaud",     out string? lb) && cmbBaud.Items.Contains(lb))
                 cmbBaud.SelectedItem = lb;
+            if (s.TryGetValue("ProvKey0", out string? pk0) && pk0.Length == 32)
+                txtProvKey0.Text = pk0;
+            if (s.TryGetValue("ProvKey1", out string? pk1) && pk1.Length == 32)
+                txtProvKey1.Text = pk1;
+            if (s.TryGetValue("ProvKey2", out string? pk2) && pk2.Length == 32)
+                txtProvKey2.Text = pk2;
             if (s.TryGetValue("LastHwid",     out string? lh) && !string.IsNullOrEmpty(lh))
                 txtHwid.Text = lh;
-            if (s.TryGetValue("SmartRFPath",  out string? srp) && File.Exists(srp))
+            if (s.TryGetValue("SmartRFPath",      out string? srp) && File.Exists(srp))
                 _smartRfPath = srp;
-            if (s.TryGetValue("RtlPowerPath", out string? rtp) && File.Exists(rtp))
+            if (s.TryGetValue("RtlPowerPath",     out string? rtp) && File.Exists(rtp))
                 _rtlPowerPath = rtp;
-            if (s.TryGetValue("QaPpm", out string? ppmStr) && int.TryParse(ppmStr, out int ppm))
+            if (s.TryGetValue("QaPpm",            out string? ppmStr) && int.TryParse(ppmStr, out int ppm))
                 _qaPpm = ppm;
+            if (s.TryGetValue("BoardRole",        out string? br) && int.TryParse(br, out int brIdx)
+                && brIdx >= 0 && brIdx < cmbBoardRole.Items.Count)
+                cmbBoardRole.SelectedIndex = brIdx;
+            if (s.TryGetValue("Sck2400CcsServer", out string? ccs) && !string.IsNullOrWhiteSpace(ccs))
+                _sck2400CcsServer = ccs;
+            if (s.TryGetValue("Sck2400SrfProg",   out string? srfp) && !string.IsNullOrWhiteSpace(srfp))
+                _sck2400SrfProg = srfp;
+            if (s.TryGetValue("Sck2400Workspace", out string? ws) && !string.IsNullOrWhiteSpace(ws))
+                _sck2400Workspace = ws;
+            if (s.TryGetValue("Sck2400XdsDfu",    out string? xds) && !string.IsNullOrWhiteSpace(xds))
+                _sck2400XdsDfu = xds;
 
             SetStatus("Disconnected", Theme.Red);
             Log("SCK Ground Station ready.", Theme.Cyan);
@@ -593,7 +649,7 @@ namespace OpenLstGroundStation
                 FlatStyle     = FlatStyle.Flat,
                 Font          = Theme.FontMono,
             };
-            foreach (string b in new[] { "9600", "19200", "38400", "57600", "115200", "230400" })
+            foreach (string b in new[] { "9600", "19200", "38400", "57600", "115200", "230400", "921600", "3000000" })
                 cmbBaud.Items.Add(b);
             cmbBaud.SelectedItem = "115200";
 
@@ -634,17 +690,57 @@ namespace OpenLstGroundStation
             lblStatus = new Label
             {
                 Location  = new Point(864, 17),
-                Size      = new Size(400, 22),
+                Size      = new Size(200, 22),
                 ForeColor = Theme.Red,
                 BackColor = Color.Transparent,
                 Font      = Theme.FontMono,
                 Text      = "● Disconnected",
             };
 
+            // ── Board type selector ────────────────────────────────────
+            var lblBoard = MkLabel("Board:", 1070, 17, 46, Theme.Gray);
+            var cmbBoard = new ComboBox
+            {
+                Location      = new Point(1120, 13),
+                Size          = new Size(110, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.White,
+                FlatStyle     = FlatStyle.Flat,
+                Font          = Theme.FontMono,
+            };
+            cmbBoard.Items.AddRange(new object[] { "SCK-915", "SCK-2400" });
+            cmbBoard.SelectedIndex = 0;
+            cmbBoard.SelectedIndexChanged += (s, e) =>
+            {
+                _boardType = cmbBoard.SelectedIndex == 1 ? BoardType.SCK2400 : BoardType.SCK915;
+                bool isSck2400 = _boardType == BoardType.SCK2400;
+                lblHwidH.Text = isSck2400 ? "APID:" : "HWID:";
+                if (isSck2400 && cmbBaud.Items.Contains("921600"))
+                    cmbBaud.SelectedItem = "921600";
+                else if (!isSck2400 && cmbBaud.Items.Contains("115200"))
+                    cmbBaud.SelectedItem = "115200";
+                Log($"Board: {(isSck2400 ? "SCK-2400 (CCSDS)" : "SCK-915 (OpenLST)")}", Theme.Cyan);
+                RefreshProvDescription();
+                ApplyBoardUi();
+                UpdateRfStatusLabel();
+            };
+
+            lblRfStatus = new Label
+            {
+                Location  = new Point(864, 37),
+                Size      = new Size(380, 18),
+                ForeColor = Theme.Gray,
+                BackColor = Color.Transparent,
+                Font      = Theme.FontSmall,
+                Text      = "",
+            };
+
             header.Controls.AddRange(new Control[]
             {
                 lblTitle, lblPort, cmbPort, lblBaud, cmbBaud,
-                lblHwidH, txtHwid, btnRefreshPorts, btnConnect, lblStatus
+                lblHwidH, txtHwid, btnRefreshPorts, btnConnect, lblStatus,
+                lblBoard, cmbBoard
             });
             Controls.Add(header);
         }
@@ -707,9 +803,18 @@ namespace OpenLstGroundStation
 
             var lblLogTitle = MkLabel("◈ LOG", 8, 8, 80, Theme.Cyan, Theme.FontMonoBold);
 
-            btnClearLog = MkButton("Clear", logW - 120, 5, 56, Theme.Gray, Theme.LogBack);
+            btnClearLog = MkButton("Clear", logW - 180, 5, 56, Theme.Gray, Theme.LogBack);
             btnClearLog.FlatAppearance.BorderColor = Theme.BorderColor;
             btnClearLog.Click += (s, e) => rtbLog.Clear();
+
+            var btnFilterBeacon = MkButton("[~] Beacon", logW - 120, 5, 56, Theme.Gray, Theme.LogBack);
+            btnFilterBeacon.FlatAppearance.BorderColor = Theme.BorderColor;
+            btnFilterBeacon.Click += (s, e) =>
+            {
+                _filterBeacon = !_filterBeacon;
+                btnFilterBeacon.ForeColor = _filterBeacon ? Theme.Yellow : Theme.Gray;
+                btnFilterBeacon.Text = _filterBeacon ? "[B] Beacon" : "[~] Beacon";
+            };
 
             btnLiveLog = MkButton("Live: OFF", logW - 60, 5, 56, Theme.Gray, Theme.LogBack);
             btnLiveLog.FlatAppearance.BorderColor = Theme.BorderColor;
@@ -728,7 +833,7 @@ namespace OpenLstGroundStation
                 Anchor      = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             };
 
-            logPanel.Controls.AddRange(new Control[] { lblLogTitle, btnClearLog, btnLiveLog, rtbLog });
+            logPanel.Controls.AddRange(new Control[] { lblLogTitle, btnClearLog, btnFilterBeacon, btnLiveLog, rtbLog });
             logPanel.SizeChanged += (s, e) =>
                 rtbLog.SetBounds(0, 32, logPanel.Width, logPanel.Height - 32);
 
@@ -751,7 +856,18 @@ namespace OpenLstGroundStation
 
             lblTelemAge = MkLabel("Last update: —", 264, 17, 300, Theme.Gray, Theme.FontSmall);
 
-            p.Controls.AddRange(new Control[] { btnGetTelemNow, btnTelemAuto, lblTelemAge });
+            lblRfStatus = new Label
+            {
+                Location  = new Point(580, 17),
+                Size      = new Size(400, 18),
+                ForeColor = Theme.Cyan,
+                BackColor = Color.Transparent,
+                Font      = Theme.FontSmall,
+                Text      = "",
+                TextAlign = ContentAlignment.MiddleLeft,
+            };
+
+            p.Controls.AddRange(new Control[] { btnGetTelemNow, btnTelemAuto, lblTelemAge, lblRfStatus });
 
             int col1 = 10, col2 = 310, rowStart = 52, rowH = 68;
 
@@ -766,6 +882,13 @@ namespace OpenLstGroundStation
             p.Controls.Add(BuildTelemPanel("UART1 RX Count",  col2, rowStart + rowH * 4, ref lblUart1,    "—"));
             p.Controls.Add(BuildTelemPanel("RX Mode",         col1, rowStart + rowH * 5, ref lblRxMode,   "—"));
             p.Controls.Add(BuildTelemPanel("TX Mode",         col2, rowStart + rowH * 5, ref lblTxMode,   "—"));
+            p.Controls.Add(BuildTelemPanel("Die Temp",        col1, rowStart + rowH * 6, ref lblDieTemp,  "—"));
+            p.Controls.Add(BuildTelemPanel("Supply Voltage",  col2, rowStart + rowH * 6, ref lblSupplyV,  "—"));
+            // LEO fault recovery fields (Session 13)
+            p.Controls.Add(BuildTelemPanel("Reset Counter",   col1, rowStart + rowH * 7, ref lblResetCounter, "—"));
+            p.Controls.Add(BuildTelemPanel("Reset Cause",     col2, rowStart + rowH * 7, ref lblResetCause,   "—"));
+            p.Controls.Add(BuildTelemPanel("Safe Mode",       col1, rowStart + rowH * 8, ref lblSafeMode,     "—"));
+            p.Controls.Add(BuildTelemPanel("Uptime (min)",    col2, rowStart + rowH * 8, ref lblUptimeMin,    "—"));
         }
 
         private Panel BuildTelemPanel(string title, int x, int y, ref Label valueLabel, string defaultVal)
@@ -804,12 +927,15 @@ namespace OpenLstGroundStation
             p.Controls.Add(MkSectionLabel("── Board Commands", col1, row));
             row += 28;
 
+            // Note: Get Telem is on the Home tab (SendGetTelemAsync waits for tlm_beacon).
+            // It is intentionally excluded here -- SendSimpleCommandAsync waits for cmd_ack
+            // which get_telem never returns, so it would always time out for SCK-2400.
             var cmds = new[]
             {
-                ("Get Telem",    "get_telem"),
-                ("Get Callsign", "get_callsign"),
-                ("Get Time",     "get_time"),
-                ("Reboot",       "reboot"),
+                ("Get Callsign",    "get_callsign"),
+                ("Get Time",        "get_time"),
+                ("Reboot",          "reboot"),
+                ("Clear Safe Mode", "clear_safe_mode"),
             };
 
             int bx = col1, by = row;
@@ -823,7 +949,43 @@ namespace OpenLstGroundStation
                 if (bx > 600) { bx = col1; by += 36; }
             }
 
-            row = by + 46;
+            // Beacon ON / OFF -- sends CMD_BEACON_CTRL with 0x01 or 0x00.
+            // Default firmware state is OFF; turn ON only when you need the
+            // autonomous heartbeat (e.g. RF link testing, range checks).
+            var btnBeaconOn = MkButton("Beacon ON", col1, by + 36, 130, Theme.Green, Theme.PanelBack);
+            btnBeaconOn.Click += async (s, e) =>
+            {
+                if (!CheckConnected()) return;
+                if (_boardType != BoardType.SCK2400) { Log("Beacon: SCK-2400 only.", Theme.Yellow); return; }
+                FlushRxQueue();
+                ushort seq = IncCcsdsSeqCount();
+                ushort dest = ActiveHwid;
+                byte[] args = new byte[] { 0x01 };   // 0x01 = enable
+                WritePacket(CcsdsProtocol.BuildCommand(seq, CcsdsProtocol.CMD_BEACON_CTRL, args, dest));
+                LogTx($"[CCSDS] beacon_ctrl ON seq={seq} dest=0x{dest:X3}", 0);
+                var ack = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 2000);
+                Log(ack != null ? "Beacon ON ✓" : "Beacon ON — no ACK", ack != null ? Theme.Green : Theme.Yellow);
+            };
+
+            var btnBeaconOff = MkButton("Beacon OFF", col1 + 144, by + 36, 130, Theme.Red, Theme.PanelBack);
+            btnBeaconOff.Click += async (s, e) =>
+            {
+                if (!CheckConnected()) return;
+                if (_boardType != BoardType.SCK2400) { Log("Beacon: SCK-2400 only.", Theme.Yellow); return; }
+                FlushRxQueue();
+                ushort seq = IncCcsdsSeqCount();
+                ushort dest = ActiveHwid;
+                byte[] args = new byte[] { 0x00 };   // 0x00 = disable
+                WritePacket(CcsdsProtocol.BuildCommand(seq, CcsdsProtocol.CMD_BEACON_CTRL, args, dest));
+                LogTx($"[CCSDS] beacon_ctrl OFF seq={seq} dest=0x{dest:X3}", 0);
+                var ack = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 2000);
+                Log(ack != null ? "Beacon OFF ✓" : "Beacon OFF — no ACK", ack != null ? Theme.Green : Theme.Yellow);
+            };
+            p.Controls.AddRange(new Control[] { btnBeaconOn, btnBeaconOff });
+            _sck2400OnlyControls.Add(btnBeaconOn);
+            _sck2400OnlyControls.Add(btnBeaconOff);
+
+            row = by + 82;
             p.Controls.Add(MkSectionLabel("── Callsign", col1, row));
             row += 28;
 
@@ -843,6 +1005,119 @@ namespace OpenLstGroundStation
             p.Controls.AddRange(new Control[] { txtCallsign, btnSetCallsign });
 
             row += 46;
+            p.Controls.Add(MkSectionLabel("── OAD Flash Test", col1, row));
+            row += 28;
+
+            // Flash Status button — sends CMD_OAD_STATUS (no flash touch).
+            // Response: APID_CMD_ACK with payload [0x14][active][rxd3][rxd2][rxd1][rxd0][total2][total1][total0]
+            // Use this to verify the OAD command path is alive before touching flash.
+            var btnOadStatus = MkButton("Flash Status", col1, row, 170, Theme.Cyan, Theme.PanelBack);
+            btnOadStatus.Click += async (s, e) =>
+            {
+                if (_boardType != BoardType.SCK2400) { Log("OAD: SCK-2400 only.", Theme.Yellow); return; }
+                await SendOadStatusAsync();
+            };
+            p.Controls.Add(btnOadStatus);
+            _sck2400OnlyControls.Add(btnOadStatus);
+
+            // Flash Open Test — sends CMD_OAD_START with 4KB dummy image.
+            // This calls extFlashOpen() + extFlashErase(0, 4096) + extFlashClose() on the firmware.
+            // ACK status 0x00 = flash open+erase succeeded. 0x01 = failed (SPI problem).
+            // This is the first real test of the ext flash driver from RTOS task context.
+            var btnOadFlashTest = MkButton("Flash Open Test", col1 + 184, row, 170, Theme.Yellow, Theme.PanelBack);
+            btnOadFlashTest.Click += async (s, e) =>
+            {
+                if (_boardType != BoardType.SCK2400) { Log("OAD: SCK-2400 only.", Theme.Yellow); return; }
+                await SendOadFlashOpenTestAsync();
+            };
+            p.Controls.Add(btnOadFlashTest);
+            _sck2400OnlyControls.Add(btnOadFlashTest);
+
+            row += 46;
+            p.Controls.Add(MkSectionLabel("── OAD Update", col1, row));
+            row += 28;
+
+            // Hex file picker — selects the firmware .hex to deliver over RF.
+            // Default: Debug output of the current project (same as Flash button).
+            p.Controls.Add(MkLabel("HEX:", col1, row + 3, 38, Theme.Gray));
+            txtOadHexPath = new TextBox
+            {
+                Location        = new Point(col1 + 42, row),
+                Size            = new Size(264, 26),
+                BackColor       = Theme.PanelBack,
+                ForeColor       = Theme.White,
+                BorderStyle     = BorderStyle.FixedSingle,
+                Font            = Theme.FontMono,
+                PlaceholderText = "path to firmware .hex",
+                Text            = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT,
+                                               "Debug", $"{SCK2400_PROJECT}.hex"),
+            };
+            var btnOadBrowse = MkButton("…", col1 + 310, row, 32, Theme.Gray, Theme.PanelBack);
+            btnOadBrowse.Click += (s, e) =>
+            {
+                using var dlg = new OpenFileDialog
+                    { Filter = "Intel HEX (*.hex)|*.hex|All files (*.*)|*.*",
+                      Title  = "Select firmware hex for OAD" };
+                if (dlg.ShowDialog() == DialogResult.OK)
+                    txtOadHexPath.Text = dlg.FileName;
+            };
+            p.Controls.AddRange(new Control[] { txtOadHexPath, btnOadBrowse });
+
+            row += 36;
+
+            // Start OAD: parses hex, sends CMD_OAD_START, streams chunks, CMD_OAD_END.
+            var btnOadStart = MkButton("Start OAD", col1, row, 130, Theme.Green, Theme.PanelBack);
+            btnOadStart.Click += async (s, e) =>
+            {
+                if (_boardType != BoardType.SCK2400) { Log("OAD: SCK-2400 only.", Theme.Yellow); return; }
+                if (_oadCts != null) { Log("OAD already in progress.", Theme.Yellow); return; }
+                _oadCts = new CancellationTokenSource();
+                btnOadStart.Enabled = false;
+                try   { await SendOadUpdateAsync(txtOadHexPath.Text.Trim(), _oadCts.Token); }
+                finally { _oadCts?.Dispose(); _oadCts = null; btnOadStart.Enabled = true; }
+            };
+
+            // Abort OAD: sends CMD_OAD_ABORT and cancels the local loop.
+            var btnOadAbort = MkButton("Abort OAD", col1 + 144, row, 130, Theme.Red, Theme.PanelBack);
+            btnOadAbort.Click += async (s, e) =>
+            {
+                _oadCts?.Cancel();
+                if (!CheckConnected()) return;
+                ushort seq = IncCcsdsSeqCount();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, CcsdsProtocol.CMD_OAD_ABORT, ActiveHwid));
+                LogTx($"[CCSDS] oad_abort seq={seq}", 0);
+                await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 2000);
+                Log("OAD aborted.", Theme.Yellow);
+            };
+            p.Controls.AddRange(new Control[] { btnOadStart, btnOadAbort });
+
+            row += 36;
+
+            // Progress label — updated during chunk delivery.
+            lblOadProgress = MkLabel("", col1, row, 500, Theme.Gray);
+            p.Controls.Add(lblOadProgress);
+
+            row += 28;
+
+            // Inter-chunk delay selector — tunable for RF link testing.
+            // 10ms = floor (on-air ~8ms + yield ~10ms).  Default 20ms adds margin.
+            // Lower = faster OAD; too low drops chunks silently at sRfForwardBuf.
+            p.Controls.Add(MkLabel("Inter-chunk delay:", col1, row + 3, 130, Theme.Gray));
+            cmbOadDelay = new ComboBox
+            {
+                Location      = new Point(col1 + 134, row),
+                Size          = new Size(80, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.White,
+                Font          = Theme.FontMono,
+            };
+            foreach (int ms in new[] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 })
+                cmbOadDelay.Items.Add($"{ms} ms");
+            cmbOadDelay.SelectedIndex = 0; // default 10ms (floor confirmed)
+            p.Controls.Add(cmbOadDelay);
+
+            row += 28;
             p.Controls.Add(MkSectionLabel("── Raw Command", col1, row));
             row += 28;
 
@@ -889,14 +1164,48 @@ namespace OpenLstGroundStation
             p.Controls.AddRange(new Control[] { txtProjectDir, btnBrowseDir });
             row += 36;
 
+            // ── SCK-2400 board role selector ──────────────────────────────
+            // Sets SCK_APID_THIS_BOARD at build time via preprocessor define.
+            // Only relevant when board type is SCK-2400 -- hidden for SCK-915.
+            p.Controls.Add(MkLabel("Board Role:", lx, row + 3, 95, Theme.Gray));
+            cmbBoardRole = new ComboBox
+            {
+                Location      = new Point(lx + 98, row),
+                Size          = new Size(180, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.Cyan,
+                Font          = Theme.FontMono,
+            };
+            cmbBoardRole.Items.AddRange(new object[]
+            {
+                "GS Board  (APID 0x010)",
+                "Remote 1  (APID 0x011)",
+                "Remote 2  (APID 0x012)",
+            });
+            cmbBoardRole.SelectedIndex = 0;
+            var lblBoardRoleNote = MkLabel(
+                "Sets SCK_APID_THIS_BOARD — flash GS first, then remote",
+                lx + 288, row + 5, 360, Theme.Gray, Theme.FontSmall);
+            p.Controls.AddRange(new Control[] { cmbBoardRole, lblBoardRoleNote });
+            row += 36;
+
             btnBuild = MkButton("▶ Build", lx, row, 110, Theme.Yellow, Theme.PanelBack);
             btnBuild.Click += async (s, e) => await RunBuildAsync();
 
             var btnClean = MkButton("⌧ Clean", lx + 120, row, 90, Theme.Gray, Theme.PanelBack);
-            btnClean.Click += (s, e) => RunClean();
+            btnClean.Click += (s, e) =>
+            {
+                if (_boardType == BoardType.SCK2400) RunClean_SCK2400();
+                else RunClean();
+            };
 
             var btnCleanBuild = MkButton("⌧ Clean + Build", lx + 220, row, 140, Theme.Magenta, Theme.PanelBack);
-            btnCleanBuild.Click += async (s, e) => { RunClean(); await RunBuildAsync(); };
+            btnCleanBuild.Click += async (s, e) =>
+            {
+                if (_boardType == BoardType.SCK2400) await RunBuildAsync_SCK2400(cleanFirst: true);
+                else { RunClean(); await RunBuildAsync(); }
+            };
 
             p.Controls.AddRange(new Control[] { btnBuild, btnClean, btnCleanBuild });
             row += 42;
@@ -941,7 +1250,7 @@ namespace OpenLstGroundStation
 
             var lblPowerNote = new Label
             {
-                Text      = "Patches RF_PA_CONFIG in board.h before build — no manual editing required",
+                Text      = "SCK-915: patches RF_PA_CONFIG in board.h  |  SCK-2400: patches TX_POWER in radio.h",
                 Location  = new Point(12, 30),
                 Size      = new Size(600, 16),
                 ForeColor = Theme.Gray,
@@ -990,10 +1299,14 @@ namespace OpenLstGroundStation
             btnSign = MkButton("Sign", lx, row, 100, Theme.Cyan, Theme.PanelBack);
             btnSign.Click += BtnSign_Click;
 
-            btnFlash = MkButton("▶ Flash OTA", lx + 112, row, 130, Theme.Green, Theme.PanelBack);
+            btnFlash = MkButton("▶ Flash", lx + 112, row, 130, Theme.Green, Theme.PanelBack);
             btnFlash.BackColor = Color.FromArgb(20, 60, 20);
             btnFlash.FlatAppearance.BorderColor = Color.FromArgb(40, 120, 40);
-            btnFlash.Click += async (s, e) => await RunFlashAsync();
+            btnFlash.Click += async (s, e) =>
+            {
+                if (_boardType == BoardType.SCK2400) await RunFlashLocal_SCK2400();
+                else await RunFlashAsync();
+            };
 
             btnBuildFlash = MkButton("▶ Build + Flash", lx + 254, row, 150, Theme.Yellow, Theme.PanelBack);
             btnBuildFlash.Click += async (s, e) => await RunBuildAndFlashAsync();
@@ -1012,6 +1325,35 @@ namespace OpenLstGroundStation
 
             p.Controls.AddRange(new Control[] { btnSign, btnFlash, btnBuildFlash, btnFlashCancel });
             row += 46;
+
+            // ── SCK-2400: Flash BIM Only (one-time board provisioning) ────
+            // Flashes BIM to pages 0-1 with -e all. Use once per board at
+            // factory provisioning. After this, never flash BIM again --
+            // all future updates are firmware-only via the Flash button above.
+            var btnFlashBim = MkButton("⚙ Flash BIM Only", lx, row, 170,
+                Color.FromArgb(180, 120, 0), Theme.PanelBack);
+            btnFlashBim.BackColor = Color.FromArgb(40, 30, 5);
+            btnFlashBim.FlatAppearance.BorderColor = Color.FromArgb(140, 90, 0);
+            btnFlashBim.Click += async (s, e) =>
+            {
+                if (_boardType != BoardType.SCK2400) return;
+                var confirm = MessageBox.Show(
+                    "Flash BIM to pages 0-1 with full erase.\n\n" +
+                    "This is a ONE-TIME operation for initial board provisioning.\n" +
+                    "After flashing BIM, use the normal Flash button for all\n" +
+                    "future firmware updates — BIM should never be reflashed.\n\n" +
+                    "Continue?",
+                    "Flash BIM — One-Time Provisioning",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (confirm != DialogResult.Yes) return;
+                await RunFlashBimAsync();
+            };
+            var lblFlashBimNote = MkLabel(
+                "One-time provisioning only — BIM is permanent after initial flash",
+                lx + 180, row + 5, 430, Theme.Gray, Theme.FontSmall);
+            p.Controls.AddRange(new Control[] { btnFlashBim, lblFlashBimNote });
+            row += 42;
 
             pbFlash = new ProgressBar
             {
@@ -1422,13 +1764,13 @@ namespace OpenLstGroundStation
         // ══════════════════════════════════════════════════════════════════
         private void WireTimers()
         {
-            _telemTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+            _telemTimer = new System.Windows.Forms.Timer { Interval = 3000 };
             _telemTimer.Tick += async (s, e) => await SendGetTelemAsync();
 
             _liveLogTimer = new System.Windows.Forms.Timer { Interval = 2000 };
             _liveLogTimer.Tick += LiveLogTimer_Tick;
 
-            _gpsTimer = new System.Windows.Forms.Timer { Interval = 10000 };
+            _gpsTimer = new System.Windows.Forms.Timer { Interval = 10000 };  // 10s GPS poll for both boards
             _gpsTimer.Tick += async (s, e) => await SendGetGpsAsync();
 
             // Baro animation timer — updates altitude display box every 500ms
@@ -1451,7 +1793,8 @@ namespace OpenLstGroundStation
                 btnConnect.Text = "Connect";
                 SetStatus("● Disconnected", Theme.Red);
                 Log("Serial port closed.", Theme.Gray);
-                return;
+                _physicalBoardApid = 0;  // reset -- prevents stale encrypt state on reconnect
+                UpdateRfStatusLabel();
             }
 
             string portName = cmbPort.SelectedItem?.ToString() ?? "";
@@ -1473,6 +1816,16 @@ namespace OpenLstGroundStation
                 btnConnect.Text = "Disconnect";
                 SetStatus($"● Connected  {portName} @ {baud}", Theme.Green);
                 Log($"Connected: {portName} @ {baud}", Theme.Green);
+                // Capture physical board APID for RF crypto gating.
+                // Any packet destined for a different APID goes over RF and must be encrypted.
+                if (_boardType == BoardType.SCK2400)
+                {
+                    _physicalBoardApid = ActiveHwid;
+                    Log($"Physical board APID captured: 0x{_physicalBoardApid:X3} -- RF crypto active for remote APIDs", Theme.Cyan);
+                    // Crypto keys live in firmware security.h only.
+                    // C# sends plaintext -- GS board firmware handles all encryption.
+                    UpdateRfStatusLabel();
+                }
             }
             catch (Exception ex)
             {
@@ -1494,41 +1847,74 @@ namespace OpenLstGroundStation
                 lock (_rxLock)
                 {
                     for (int i = 0; i < read; i++) _rxBuf.Add(buf[i]);
-                    var packets = OpenLstProtocol.FramePackets(_rxBuf, msg => LogRx(msg));
-                    foreach (var pkt in packets)
+
+                    if (_boardType == BoardType.SCK2400)
                     {
-                        _rxQueue.Enqueue(pkt);
-
-                        // Update Home tab telem
-                        if (pkt.OpName == "telem" && pkt.Hwid == ActiveHwid)
+                        // ── SCK-2400 CCSDS path ────────────────────────
+                        var packets = CcsdsProtocol.FramePackets(_rxBuf, msg => LogRx(msg));
+                        foreach (var pkt in packets)
                         {
-                            var td = OpenLstProtocol.ParseTelem(pkt.RawPayload);
-                            if (td != null) BeginInvoke(new Action(() => UpdateTelemDisplay(td)));
-                        }
+                            _rxQueue.Enqueue(pkt);
 
-                        // Handle autonomous GPS beacons from Pico via normal pico_msg path
-                        bool gpsHandled = false;
-                        if (pkt.OpName == "pico_msg" && pkt.PicoPayload != null
-                            && pkt.PicoPayload.StartsWith("GPS:"))
-                        {
-                            BeginInvoke(new Action(() => HandleGpsPacket(pkt.PicoPayload)));
-                            gpsHandled = true;
-                        }
-
-                        // Handle GPS beacon arriving over RF (raw path)
-                        // Skip if already handled above to prevent double log line
-                        if (!gpsHandled && pkt.RawPayload != null)
-                        {
-                            string raw = System.Text.Encoding.ASCII.GetString(
-                                pkt.RawPayload.Where(b => b >= 0x20 && b < 0x7F).ToArray());
-                            int idx = raw.IndexOf("GPS:", StringComparison.Ordinal);
-                            if (idx >= 0)
+                            // Update Home tab telem on beacon
+                            if (pkt.Hwid == CcsdsProtocol.APID_TLM_BEACON)
                             {
-                                string gpsStr = raw.Substring(idx);
-                                int end = gpsStr.IndexOfAny(new[] { '\0', '\r', '\n' });
-                                if (end > 0) gpsStr = gpsStr.Substring(0, end);
-                                if (gpsStr.Length > 10)
+                                var td = CcsdsProtocol.ParseTelem(pkt.RawPayload);
+                                if (td != null)
+                                    BeginInvoke(new Action(() => UpdateCcsdsTelemDisplay(td)));
+                            }
+
+                            // Route GPS telemetry to map.
+                            // cmd_ack payload has leading opcode byte (0x27 = ''')
+                            // before "GPS:" so search for GPS: rather than StartsWith.
+                            if (pkt.RawPayload != null)
+                            {
+                                string ascii = System.Text.Encoding.ASCII.GetString(
+                                    pkt.RawPayload.Where(b => b >= 0x20 && b < 0x7F).ToArray());
+                                int gpsIdx = ascii.IndexOf("GPS:", StringComparison.Ordinal);
+                                if (gpsIdx >= 0)
+                                {
+                                    string gpsStr = ascii.Substring(gpsIdx);
                                     BeginInvoke(new Action(() => HandleGpsPacket(gpsStr)));
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // ── SCK-915 OpenLST path (unchanged) ──────────
+                        var packets = OpenLstProtocol.FramePackets(_rxBuf, msg => LogRx(msg));
+                        foreach (var pkt in packets)
+                        {
+                            _rxQueue.Enqueue(pkt);
+
+                            if (pkt.OpName == "telem" && pkt.Hwid == ActiveHwid)
+                            {
+                                var td = OpenLstProtocol.ParseTelem(pkt.RawPayload);
+                                if (td != null) BeginInvoke(new Action(() => UpdateTelemDisplay(td)));
+                            }
+
+                            bool gpsHandled = false;
+                            if (pkt.OpName == "pico_msg" && pkt.PicoPayload != null
+                                && pkt.PicoPayload.StartsWith("GPS:"))
+                            {
+                                BeginInvoke(new Action(() => HandleGpsPacket(pkt.PicoPayload)));
+                                gpsHandled = true;
+                            }
+
+                            if (!gpsHandled && pkt.RawPayload != null)
+                            {
+                                string raw = System.Text.Encoding.ASCII.GetString(
+                                    pkt.RawPayload.Where(b => b >= 0x20 && b < 0x7F).ToArray());
+                                int idx = raw.IndexOf("GPS:", StringComparison.Ordinal);
+                                if (idx >= 0)
+                                {
+                                    string gpsStr = raw.Substring(idx);
+                                    int end = gpsStr.IndexOfAny(new[] { '\0', '\r', '\n' });
+                                    if (end > 0) gpsStr = gpsStr.Substring(0, end);
+                                    if (gpsStr.Length > 10)
+                                        BeginInvoke(new Action(() => HandleGpsPacket(gpsStr)));
+                                }
                             }
                         }
                     }
@@ -1566,6 +1952,12 @@ namespace OpenLstGroundStation
         private void WritePacket(byte[] packet)
         {
             if (_port == null || !_port.IsOpen) throw new InvalidOperationException("Not connected");
+
+            // C# sends plaintext CCSDS packets to the GS board over USB.
+            // GS board firmware (crypto.c) handles AES-128-CCM encryption
+            // before forwarding over RF. No crypto in C#.
+
+
             _port.Write(packet, 0, packet.Length);
         }
 
@@ -1582,32 +1974,480 @@ namespace OpenLstGroundStation
         private async Task SendSimpleCommandAsync(string commandName)
         {
             if (!CheckConnected()) return;
-            ushort hwid = ActiveHwid;
-            ushort seq  = IncSeqNum();
-            FlushRxQueue();
-            WritePacket(OpenLstProtocol.BuildSimpleCommand(hwid, seq, commandName));
-            LogTx($"{commandName}  (seq={seq})", hwid);
-            var pkt = await WaitForReply(hwid, seq, 3000);
-            if (pkt != null) Log($"  ✓ {pkt.OpName} {(pkt.AckValue >= 0 ? pkt.AckValue.ToString() : "")}", Theme.Green);
-            else             Log($"  ✗ No reply", Theme.Red);
+            if (_boardType == BoardType.SCK2400)
+            {
+                byte subOpcode = commandName switch
+                {
+                    "reboot"          => CcsdsProtocol.CMD_REBOOT,
+                    "get_telem"       => CcsdsProtocol.CMD_GET_TELEM,
+                    "clear_safe_mode" => CcsdsProtocol.CMD_CLEAR_SAFE_MODE,
+                    _                 => CcsdsProtocol.CMD_GET_TELEM,
+                };
+                ushort seq      = IncCcsdsSeqCount();
+                ushort destApid = ActiveHwid;
+                FlushRxQueue();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, subOpcode, destApid));
+                LogTx($"[CCSDS] {commandName} seq={seq} dest=0x{destApid:X3}", 0);
+                var pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 3000);
+                if (pkt != null) Log($"  ✓ cmd_ack seq={seq}", Theme.Green);
+                else             Log($"  ✗ No reply to {commandName}", Theme.Red);
+            }
+            else
+            {
+                ushort hwid = ActiveHwid;
+                ushort seq  = IncSeqNum();
+                FlushRxQueue();
+                WritePacket(OpenLstProtocol.BuildSimpleCommand(hwid, seq, commandName));
+                LogTx($"{commandName}  (seq={seq})", hwid);
+                var pkt = await WaitForReply(hwid, seq, 3000);
+                if (pkt != null) Log($"  ✓ {pkt.OpName} {(pkt.AckValue >= 0 ? pkt.AckValue.ToString() : "")}", Theme.Green);
+                else             Log($"  ✗ No reply", Theme.Red);
+            }
         }
 
         private async Task SendGetTelemAsync()
         {
             if (!CheckConnected()) return;
-            ushort hwid = ActiveHwid;
-            ushort seq  = IncSeqNum();
-            FlushRxQueue();
-            WritePacket(OpenLstProtocol.BuildSimpleCommand(hwid, seq, "get_telem"));
-            LogTx($"get_telem  (seq={seq})", hwid);
-            var pkt = await WaitForReply(hwid, seq, 3000);
-            if (pkt != null)
+            if (_boardType == BoardType.SCK2400)
             {
-                Log($"  ✓ telem received  hwid={pkt.Hwid:X4}", Theme.Green);
-                var td = OpenLstProtocol.ParseTelem(pkt.RawPayload);
-                if (td != null) UpdateTelemDisplay(td);
+                ushort seq      = IncCcsdsSeqCount();
+                ushort destApid = ActiveHwid;
+                FlushRxQueue();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, CcsdsProtocol.CMD_GET_TELEM, destApid));
+                LogTx($"[CCSDS] get_telem seq={seq} dest=0x{destApid:X3}", 0);
+                var pkt = await WaitForReply(CcsdsProtocol.APID_TLM_BEACON, seq, 3000);
+                if (pkt != null)
+                {
+                    Log($"  ✓ tlm_beacon received seq={seq} from 0x{destApid:X3}", Theme.Green);
+                    var td = CcsdsProtocol.ParseTelem(pkt.RawPayload);
+                    if (td != null) UpdateCcsdsTelemDisplay(td);
+                }
+                else Log("  ✗ No telem reply", Theme.Red);
             }
-            else Log("  ✗ No telem reply", Theme.Red);
+            else
+            {
+                ushort hwid = ActiveHwid;
+                ushort seq  = IncSeqNum();
+                FlushRxQueue();
+                WritePacket(OpenLstProtocol.BuildSimpleCommand(hwid, seq, "get_telem"));
+                LogTx($"get_telem  (seq={seq})", hwid);
+                var pkt = await WaitForReply(hwid, seq, 3000);
+                if (pkt != null)
+                {
+                    Log($"  ✓ telem received  hwid={pkt.Hwid:X4}", Theme.Green);
+                    var td = OpenLstProtocol.ParseTelem(pkt.RawPayload);
+                    if (td != null) UpdateTelemDisplay(td);
+                }
+                else Log("  ✗ No telem reply", Theme.Red);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  OAD FLASH TEST COMMANDS
+        //  These exercise the ext flash driver from firmware task context.
+        //  Use in order: Flash Status first (no flash), then Flash Open Test.
+        // ══════════════════════════════════════════════════════════════════
+
+        private async Task SendOadStatusAsync()
+        {
+            // CMD_OAD_STATUS (0x14) — returns current OAD session state.
+            // No flash access — safe to call any time.
+            // Response payload: [subOpcode=0x14][active][rxd3][rxd2][rxd1][rxd0][sz2][sz1][sz0]
+            if (!CheckConnected()) return;
+            ushort seq      = IncCcsdsSeqCount();
+            ushort destApid = ActiveHwid;
+            FlushRxQueue();
+            WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, CcsdsProtocol.CMD_OAD_STATUS, destApid));
+            LogTx($"[CCSDS] oad_status seq={seq} dest=0x{destApid:X3}", 0);
+            var pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 3000);
+            if (pkt != null && pkt.RawPayload.Length >= 2)
+            {
+                bool   active = pkt.RawPayload.Length > 1 && pkt.RawPayload[1] == 0x01;
+                uint   rxd    = pkt.RawPayload.Length >= 6
+                    ? (uint)((pkt.RawPayload[2] << 24) | (pkt.RawPayload[3] << 16) |
+                              (pkt.RawPayload[4] << 8)  |  pkt.RawPayload[5])
+                    : 0;
+                Log($"  ✓ oad_status: active={active}  bytesReceived={rxd}", Theme.Green);
+            }
+            else if (pkt != null)
+                Log($"  ✓ oad_status ACK (short payload)", Theme.Green);
+            else
+                Log("  ✗ No oad_status reply — command path broken", Theme.Red);
+        }
+
+        private async Task SendOadFlashOpenTestAsync()
+        {
+            // CMD_OAD_START (0x10) with dummy 4KB image.
+            // Firmware calls: extFlashOpen() → extFlashErase(0, 4096) → extFlashClose()
+            // ACK status byte: 0x00 = flash open+erase OK, 0x01 = flash failed.
+            // This is the first live test of the SPI flash driver from RTOS task context.
+            if (!CheckConnected()) return;
+            ushort seq      = IncCcsdsSeqCount();
+            ushort destApid = ActiveHwid;
+
+            // CMD_OAD_START payload: [4B imgSize BE][2B crc16 BE]
+            // Use 4096 bytes (one sector) so erase is minimal.
+            uint   dummySize = 4096;
+            ushort dummyCrc  = 0x0000;
+            byte[] args = new byte[6]
+            {
+                (byte)(dummySize >> 24), (byte)(dummySize >> 16),
+                (byte)(dummySize >>  8), (byte)(dummySize      ),
+                (byte)(dummyCrc  >>  8), (byte)(dummyCrc        ),
+            };
+
+            FlushRxQueue();
+            WritePacket(CcsdsProtocol.BuildCommand(seq, CcsdsProtocol.CMD_OAD_START, args, destApid));
+            LogTx($"[CCSDS] oad_start (flash open test, 4KB) seq={seq} dest=0x{destApid:X3}", 0);
+
+            // Erase can take up to 240ms per sector — give it 3 seconds
+            var pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 3000);
+            if (pkt != null && pkt.RawPayload.Length >= 2)
+            {
+                byte status   = pkt.RawPayload[1];
+                byte flashErr = pkt.RawPayload.Length >= 3 ? pkt.RawPayload[2] : (byte)0xFF;
+                byte manfId   = pkt.RawPayload.Length >= 4 ? pkt.RawPayload[3] : (byte)0x00;
+                byte devId    = pkt.RawPayload.Length >= 5 ? pkt.RawPayload[4] : (byte)0x00;
+
+                if (status == 0x00)
+                {
+                    Log("  ✓ oad_start ACK status=0x00 — extFlashOpen() + erase SUCCEEDED", Theme.Green);
+                    Log($"    JEDEC ID: manf=0x{manfId:X2} dev=0x{devId:X2} (expect manf=0xC2 dev=0x14)", Theme.Cyan);
+                }
+                else
+                {
+                    string errDesc = flashErr switch
+                    {
+                        0x10 => "SPI_open() returned NULL — driver init failed",
+                        0x20 => "RDP spiXfer failed — SPI transfer error",
+                        0x30 => "WaitReady timed out — chip not responding after RDP",
+                        0x40 => "RDID spiXfer failed — SPI transfer error",
+                        0x50 => $"JEDEC ID mismatch — got manf=0x{manfId:X2} dev=0x{devId:X2}, expect manf=0xC2 dev=0x14",
+                        0xFF => "no error code in ACK (old firmware?)",
+                        _    => $"unknown error code 0x{flashErr:X2}",
+                    };
+                    Log($"  ✗ oad_start FAILED — flashErr=0x{flashErr:X2}: {errDesc}", Theme.Red);
+                }
+
+                // Always abort the dummy session so firmware is clean for real OAD
+                await Task.Delay(50);
+                ushort abortSeq = IncCcsdsSeqCount();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(abortSeq, CcsdsProtocol.CMD_OAD_ABORT, destApid));
+                LogTx($"[CCSDS] oad_abort (cleanup) seq={abortSeq}", 0);
+                await WaitForReply(CcsdsProtocol.APID_CMD_ACK, abortSeq, 1000);
+            }
+            else
+                Log("  ✗ No oad_start reply — command path broken or firmware crashed", Theme.Red);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  OAD UPDATE — full RF firmware delivery sequence
+        // ══════════════════════════════════════════════════════════════════
+
+        // ── Sck2400ParseFirmwareHex ───────────────────────────────────────
+        // Parses an Intel HEX file and returns the raw binary of the
+        // SCK-2400 application image (flash region 0x4000–0x5FFFF).
+        // Handles type-00 (data) and type-04 (extended linear address) records.
+        // Skips CCFG (0x57FA8+) which is not part of the OAD image.
+        // Returns null on parse error.
+        private static byte[]? Sck2400ParseFirmwareHex(string hexPath)
+        {
+            const uint APP_START  = 0x00004000;
+            const uint APP_END    = 0x00056000; // exclude CCFG
+            const uint CCFG_START = 0x00057000;
+
+            var data = new SortedDictionary<uint, byte>();
+            uint upperBase = 0;
+
+            try
+            {
+                foreach (string line in File.ReadAllLines(hexPath))
+                {
+                    if (line.Length < 9 || line[0] != ':') continue;
+                    int    byteCount = Convert.ToInt32(line.Substring(1, 2), 16);
+                    uint   addr      = Convert.ToUInt32(line.Substring(3, 4), 16);
+                    int    recType   = Convert.ToInt32(line.Substring(7, 2), 16);
+
+                    if (recType == 0x04) // Extended Linear Address
+                    {
+                        upperBase = Convert.ToUInt32(line.Substring(9, 4), 16) << 16;
+                    }
+                    else if (recType == 0x00) // Data
+                    {
+                        uint fullAddr = upperBase | addr;
+                        if (fullAddr >= CCFG_START) continue; // skip CCFG
+                        if (fullAddr + (uint)byteCount <= APP_START) continue; // skip BIM region
+                        if (fullAddr >= APP_END) continue;
+
+                        for (int i = 0; i < byteCount; i++)
+                        {
+                            uint byteAddr = fullAddr + (uint)i;
+                            if (byteAddr < APP_START || byteAddr >= APP_END) continue;
+                            data[byteAddr] =
+                                Convert.ToByte(line.Substring(9 + i * 2, 2), 16);
+                        }
+                    }
+                    // type 01 (EOF) and others: ignore
+                }
+            }
+            catch { return null; }
+
+            if (data.Count == 0) return null;
+
+            uint firstAddr = data.Keys.First();
+            uint lastAddr  = data.Keys.Last();
+            int  imgLen    = (int)(lastAddr - firstAddr + 1);
+            byte[] img     = new byte[imgLen]; // unfilled bytes = 0x00
+
+            foreach (var kv in data)
+                img[kv.Key - firstAddr] = kv.Value;
+
+            return img;
+        }
+
+        // ── Crc16Ccitt ────────────────────────────────────────────────────
+        // CRC16-CCITT, initial value 0xFFFF — matches firmware crc16_ccitt().
+        private static ushort Crc16Ccitt(byte[] data, int offset, int length)
+        {
+            ushort crc = 0xFFFF;
+            for (int i = offset; i < offset + length; i++)
+            {
+                crc ^= (ushort)((ushort)data[i] << 8);
+                for (int b = 0; b < 8; b++)
+                    crc = (crc & 0x8000) != 0
+                        ? (ushort)((crc << 1) ^ 0x1021)
+                        : (ushort)(crc << 1);
+            }
+            return crc;
+        }
+
+        // ── SendOadUpdateAsync ────────────────────────────────────────────
+        // Streaming OAD — no per-chunk ACK.
+        //
+        //   1. Parse firmware hex → raw binary
+        //   2. CMD_OAD_START (imgSize, crc16) — wait for erase ACK
+        //   3. Stream all CMD_OAD_CHUNK with configurable inter-chunk delay
+        //      Progress shown as "Sending X/N" based on transmit position.
+        //      No ACK per chunk — firmware writes silently to ext flash.
+        //   4. CMD_OAD_END — firmware verifies full CRC16, sets BIM flag, reboots
+        //      On CRC fail: auto-retry full image once before giving up.
+        //   5. Poll board for reboot confirmation.
+        //
+        // Inter-chunk delay must be >= 18ms (8ms on-air + 10ms RF yield).
+        // Use cmbOadDelay to tune empirically.
+        private async Task SendOadUpdateAsync(string hexPath, CancellationToken ct)
+        {
+            if (!CheckConnected()) return;
+            if (!File.Exists(hexPath))
+            { Log($"OAD: file not found: {hexPath}", Theme.Red); return; }
+
+            // ── Step 1: parse hex ─────────────────────────────────────────
+            Log($"OAD: parsing {Path.GetFileName(hexPath)}...", Theme.Gray);
+            byte[]? img = Sck2400ParseFirmwareHex(hexPath);
+            if (img == null || img.Length == 0)
+            { Log("OAD: hex parse failed — no app data found.", Theme.Red); return; }
+
+            ushort imgCrc  = Crc16Ccitt(img, 0, img.Length);
+            uint   imgSize = (uint)img.Length;
+            Log($"OAD: image {imgSize} bytes, CRC16=0x{imgCrc:X4}", Theme.Cyan);
+
+            // Read inter-chunk delay from dropdown (format "XX ms")
+            int interChunkMs = 20;
+            if (cmbOadDelay.SelectedItem is string delayStr)
+                int.TryParse(delayStr.Replace(" ms", ""), out interChunkMs);
+            Log($"OAD: streaming mode — inter-chunk delay {interChunkMs}ms, no per-chunk ACK", Theme.Cyan);
+
+            ushort destApid = ActiveHwid;
+
+            // ── Step 2: CMD_OAD_START ─────────────────────────────────────
+            // This is the only blocking handshake before streaming.
+            // Firmware erases ext flash, then ACKs when ready.
+            FlushRxQueue();
+            ushort seq = IncCcsdsSeqCount();
+            byte[] startArgs = new byte[6]
+            {
+                (byte)(imgSize >> 24), (byte)(imgSize >> 16),
+                (byte)(imgSize >>  8), (byte)(imgSize      ),
+                (byte)(imgCrc  >>  8), (byte)(imgCrc        ),
+            };
+            WritePacket(CcsdsProtocol.BuildCommand(seq, CcsdsProtocol.CMD_OAD_START,
+                                                   startArgs, destApid));
+            LogTx($"[CCSDS] oad_start size={imgSize} crc=0x{imgCrc:X4} seq={seq} dest=0x{destApid:X3}", 0);
+
+            int eraseTimeout = 5000 + (int)(imgSize / 4096) * 300;
+            var startPkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, eraseTimeout);
+            if (startPkt == null)
+            { Log("OAD: no ACK for oad_start — timeout.", Theme.Red); return; }
+            if (startPkt.RawPayload.Length < 2 || startPkt.RawPayload[1] != 0x00)
+            {
+                byte err = startPkt.RawPayload.Length >= 3 ? startPkt.RawPayload[2] : (byte)0xFF;
+                Log($"OAD: oad_start FAILED status=0x{(startPkt.RawPayload.Length>=2?startPkt.RawPayload[1]:0xFF):X2} flashErr=0x{err:X2}", Theme.Red);
+                return;
+            }
+            Log("OAD: flash erased OK — streaming chunks...", Theme.Green);
+
+            // ── Step 3: stream all chunks — no per-chunk ACK ─────────────
+            // Firmware writes each chunk to ext flash silently.
+            // Progress is based on transmit position, not ACK receipt.
+            // Final CRC at oad_end is the truth — retry whole image if it fails.
+            const int CHUNK_SIZE  = 240;
+            int       totalChunks = (img.Length + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            int       chunkIdx    = 0;
+            uint      bytesSent   = 0;
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            while (bytesSent < imgSize)
+            {
+                if (ct.IsCancellationRequested)
+                { Log("OAD: cancelled by user.", Theme.Yellow); return; }
+
+                int  chunkLen = (int)Math.Min(CHUNK_SIZE, imgSize - bytesSent);
+                uint offset   = bytesSent;
+
+                // Build chunk payload: [4B offset BE][1B len][data]
+                byte[] chunkArgs = new byte[5 + chunkLen];
+                chunkArgs[0] = (byte)(offset >> 24);
+                chunkArgs[1] = (byte)(offset >> 16);
+                chunkArgs[2] = (byte)(offset >>  8);
+                chunkArgs[3] = (byte)(offset      );
+                chunkArgs[4] = (byte)chunkLen;
+                Array.Copy(img, (int)offset, chunkArgs, 5, chunkLen);
+
+                ushort chunkSeq = IncCcsdsSeqCount();
+                WritePacket(CcsdsProtocol.BuildCommand(chunkSeq, CcsdsProtocol.CMD_OAD_CHUNK,
+                                                       chunkArgs, destApid));
+
+                bytesSent += (uint)chunkLen;
+                chunkIdx++;
+
+                // Update progress every 8 chunks to keep UI responsive
+                if (chunkIdx % 8 == 0 || bytesSent >= imgSize)
+                {
+                    int pct      = (int)(bytesSent * 100 / imgSize);
+                    double elapsedS = sw.Elapsed.TotalSeconds;
+                    double bps    = elapsedS > 0 ? bytesSent / elapsedS : 0;
+                    string prog   = $"Sending {chunkIdx}/{totalChunks}  {bytesSent}/{imgSize} bytes  {pct}%  {bps/1000:F1} KB/s";
+                    lblOadProgress.Text = prog;
+                    Application.DoEvents();
+                }
+
+                // Inter-chunk delay — must be >= 18ms to let GS RF forward buffer clear.
+                // (8ms on-air at 250kbps + 10ms RF yield in radio_transmit)
+                await Task.Delay(interChunkMs, ct).ContinueWith(_ => { });
+            }
+
+            sw.Stop();
+            double totalSec = sw.Elapsed.TotalSeconds;
+            Log($"OAD: all {totalChunks} chunks sent in {totalSec:F1}s ({imgSize/totalSec/1000:F1} KB/s) — sending oad_end...", Theme.Cyan);
+            lblOadProgress.Text = $"Verifying image ({imgSize} bytes)...";
+
+            // ── Step 4: CMD_OAD_END ───────────────────────────────────────
+            // Firmware reads back full image, verifies CRC16, writes BIM metadata.
+            // Allow extra time: 335KB read-back at SPI takes ~1s + CRC computation.
+            // Auto-retry whole image once on CRC failure — at streaming speeds
+            // a full retransmit is still only ~30 seconds.
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                if (attempt > 0)
+                {
+                    Log("OAD: CRC failed — retransmitting full image...", Theme.Yellow);
+                    lblOadProgress.Text = "Retransmitting...";
+
+                    // Re-erase and stream again
+                    FlushRxQueue();
+                    ushort reseq = IncCcsdsSeqCount();
+                    WritePacket(CcsdsProtocol.BuildCommand(reseq, CcsdsProtocol.CMD_OAD_START,
+                                                           startArgs, destApid));
+                    LogTx($"[CCSDS] oad_start (retry) seq={reseq} dest=0x{destApid:X3}", 0);
+                    var rePkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, reseq, eraseTimeout);
+                    if (rePkt == null || rePkt.RawPayload.Length < 2 || rePkt.RawPayload[1] != 0x00)
+                    { Log("OAD: retry oad_start failed.", Theme.Red); return; }
+
+                    bytesSent = 0; chunkIdx = 0;
+                    while (bytesSent < imgSize)
+                    {
+                        if (ct.IsCancellationRequested) return;
+                        int  cLen   = (int)Math.Min(CHUNK_SIZE, imgSize - bytesSent);
+                        uint cOff   = bytesSent;
+                        byte[] ca   = new byte[5 + cLen];
+                        ca[0] = (byte)(cOff >> 24); ca[1] = (byte)(cOff >> 16);
+                        ca[2] = (byte)(cOff >>  8); ca[3] = (byte)(cOff      );
+                        ca[4] = (byte)cLen;
+                        Array.Copy(img, (int)cOff, ca, 5, cLen);
+                        ushort cs = IncCcsdsSeqCount();
+                        WritePacket(CcsdsProtocol.BuildCommand(cs, CcsdsProtocol.CMD_OAD_CHUNK, ca, destApid));
+                        bytesSent += (uint)cLen; chunkIdx++;
+                        if (chunkIdx % 8 == 0 || bytesSent >= imgSize)
+                        {
+                            int pct2 = (int)(bytesSent * 100 / imgSize);
+                            lblOadProgress.Text = $"Retry: Sending {chunkIdx}/{totalChunks}  {pct2}%";
+                            Application.DoEvents();
+                        }
+                        await Task.Delay(interChunkMs, ct).ContinueWith(_ => { });
+                    }
+                    Log("OAD: retry stream complete — sending oad_end...", Theme.Cyan);
+                }
+
+                FlushRxQueue();
+                ushort endSeq = IncCcsdsSeqCount();
+                byte[] endArgs = new byte[4] { 0, 0, (byte)(imgCrc >> 8), (byte)(imgCrc) };
+                WritePacket(CcsdsProtocol.BuildCommand(endSeq, CcsdsProtocol.CMD_OAD_END,
+                                                       endArgs, destApid));
+                LogTx($"[CCSDS] oad_end seq={endSeq} dest=0x{destApid:X3}", 0);
+
+                int verifyTimeout = 8000 + (int)(imgSize / 1024) * 50;
+                var endPkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, endSeq, verifyTimeout);
+
+                if (endPkt == null)
+                {
+                    Log("OAD: no ACK for oad_end (board may have rebooted) — treating as success.", Theme.Yellow);
+                    break;
+                }
+                else if (endPkt.RawPayload.Length >= 2 && endPkt.RawPayload[1] == 0x00)
+                {
+                    Log("OAD: image verified OK — board is rebooting...", Theme.Green);
+                    break;
+                }
+                else
+                {
+                    byte failStatus = endPkt.RawPayload.Length >= 2 ? endPkt.RawPayload[1] : (byte)0xFF;
+                    Log($"OAD: oad_end FAILED status=0x{failStatus:X2}", Theme.Red);
+                    if (attempt == 1)
+                    {
+                        Log("OAD: retry also failed — aborting.", Theme.Red);
+                        lblOadProgress.Text = "OAD FAILED after retry.";
+                        return;
+                    }
+                    // loop continues → retry
+                }
+            }
+
+            lblOadProgress.Text = "OAD complete — waiting for board reboot...";
+
+            // ── Step 5: wait for board to come back ───────────────────────
+            Log("OAD: waiting for board reboot (BIM copy in progress)...", Theme.Gray);
+            await Task.Delay(3000);
+
+            for (int i = 0; i < 15; i++)
+            {
+                if (ct.IsCancellationRequested) break;
+                ushort pollSeq = IncCcsdsSeqCount();
+                FlushRxQueue();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(pollSeq,
+                    CcsdsProtocol.CMD_GET_TELEM, destApid));
+                var resp = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, pollSeq, 2000);
+                if (resp != null)
+                {
+                    Log($"✓ Board 0x{destApid:X3} responded after OAD reboot — new firmware is running!", Theme.Green);
+                    lblOadProgress.Text = "OAD complete ✓";
+                    return;
+                }
+                await Task.Delay(1000);
+            }
+
+            Log("OAD: board did not respond after reboot — check BIM copy status.", Theme.Yellow);
+            lblOadProgress.Text = "OAD complete — board not responding.";
         }
 
         private async Task SendSetCallsignAsync()
@@ -1689,15 +2529,29 @@ namespace OpenLstGroundStation
                 catch { Log("Invalid payload hex.", Theme.Red); return; }
             }
             FlushRxQueue();
-            WritePacket(OpenLstProtocol.BuildPacket(hwid, seq, cmd.Opcode, args));
-            LogTx($"[CUSTOM] {cmd.Name}  opcode=0x{cmd.Opcode:X2}  (seq={seq})", hwid);
-            var pkt = await WaitForReply(hwid, seq, 15000);
+            RxPacket? pkt = null;
+            if (_boardType == BoardType.SCK2400)
+            {
+                // SCK-2400: send CCSDS command, wait for CCSDS ACK
+                ushort ccsdsSeq = IncCcsdsSeqCount();
+                ushort destApid = ActiveHwid;
+                // Build CCSDS packet: sub-opcode = cmd.Opcode, args follow
+                WritePacket(CcsdsProtocol.BuildCommand(ccsdsSeq, cmd.Opcode, args, destApid));
+                LogTx($"[CUSTOM] {cmd.Name}  opcode=0x{cmd.Opcode:X2}  (seq={ccsdsSeq})", hwid);
+                pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, ccsdsSeq, 15000);
+            }
+            else
+            {
+                // SCK-915: send OpenLST packet
+                WritePacket(OpenLstProtocol.BuildPacket(hwid, seq, cmd.Opcode, args));
+                LogTx($"[CUSTOM] {cmd.Name}  opcode=0x{cmd.Opcode:X2}  (seq={seq})", hwid);
+                pkt = await WaitForReply(hwid, seq, 15000);
+            }
             if (pkt != null)
             {
                 if (pkt.PicoPayload != null)
                 {
                     Log($"  ✓ {pkt.OpName} → {pkt.PicoPayload}", Theme.Green);
-                    // Route GPS responses to the map
                     if (pkt.PicoPayload.StartsWith("GPS:"))
                         HandleGpsPacket(pkt.PicoPayload);
                 }
@@ -1713,17 +2567,38 @@ namespace OpenLstGroundStation
         private async Task SendGetGpsAsync()
         {
             if (!CheckConnected()) return;
-            ushort hwid = ActiveHwid;
-            ushort seq  = IncSeqNum();
-            FlushRxQueue();
-            // opcode 0x20 (PICO_MSG) + sub-opcode 0x07 (CMD_GET_GPS)
-            WritePacket(OpenLstProtocol.BuildPacket(hwid, seq, 0x20, new byte[] { 0x07 }));
-            LogTx($"GET_GPS  (seq={seq})", hwid);
-            var pkt = await WaitForReply(hwid, seq, 5000);
-            if (pkt?.PicoPayload == null)
-            { Log("  ✗ No GPS reply", Theme.Red); return; }
-            // forceLog=true — manual button always logs regardless of filter
-            HandleGpsPacket(pkt.PicoPayload, forceLog: true);
+            if (_boardType == BoardType.SCK2400)
+            {
+                ushort seq      = IncCcsdsSeqCount();
+                ushort destApid = ActiveHwid;
+                FlushRxQueue();
+                WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, CcsdsProtocol.CMD_GET_GPS, destApid));
+                LogTx($"[CCSDS] GET_GPS seq={seq} dest=0x{destApid:X3}", 0);
+                // Firmware responds with cmd_ack (APID 0x003) containing GPS string payload
+                var pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 6000);
+                if (pkt?.RawPayload == null)
+                { Log("  ✗ No GPS reply", Theme.Red); return; }
+                string gpsPayload = System.Text.Encoding.ASCII.GetString(
+                    pkt.RawPayload.Where(b => b >= 0x20 && b < 0x7F).ToArray());
+                // Strip leading opcode byte (0x27) if present
+                int gpsIdx = gpsPayload.IndexOf("GPS:", StringComparison.Ordinal);
+                if (gpsIdx >= 0)
+                    HandleGpsPacket(gpsPayload.Substring(gpsIdx), forceLog: true);
+                else
+                    Log($"  ✗ GPS: unexpected response — {gpsPayload}", Theme.Red);
+            }
+            else
+            {
+                ushort hwid = ActiveHwid;
+                ushort seq  = IncSeqNum();
+                FlushRxQueue();
+                WritePacket(OpenLstProtocol.BuildPacket(hwid, seq, 0x20, new byte[] { 0x07 }));
+                LogTx($"GET_GPS  (seq={seq})", hwid);
+                var pkt = await WaitForReply(hwid, seq, 5000);
+                if (pkt?.PicoPayload == null)
+                { Log("  ✗ No GPS reply", Theme.Red); return; }
+                HandleGpsPacket(pkt.PicoPayload, forceLog: true);
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -2342,6 +3217,13 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (string.IsNullOrWhiteSpace(txtProjectDir.Text) || !Directory.Exists(txtProjectDir.Text))
             { Log("Select a valid project directory first.", Theme.Red); return; }
 
+            if (_boardType == BoardType.SCK2400)
+            {
+                await RunBuildAsync_SCK2400();
+                return;
+            }
+
+            // ── SCK-915 build path (mingw32-make + SDCC) ──────────────────
             // Patch board.h with selected RF power mode before every build
             PatchBoardHPower();
 
@@ -2506,6 +3388,13 @@ Max altitude: {maxAlt:F1}m ASL</description>
 
         private async Task RunBuildAndFlashAsync()
         {
+            if (_boardType == BoardType.SCK2400)
+            {
+                await RunBuildAsync_SCK2400(cleanFirst: false);
+                string hex = Path.Combine(txtProjectDir.Text, "Debug", "sck2400_firmware.hex");
+                if (File.Exists(hex)) await RunFlashLocal_SCK2400(hex);
+                return;
+            }
             if (!PatchBoardHPower()) return;
             await RunBuildAsync();
             if (File.Exists(txtFirmwareFile.Text.Trim()))
@@ -2519,6 +3408,1061 @@ Max altitude: {maxAlt:F1}m ASL</description>
             btnFlash.Enabled        = enabled;
             btnBuildFlash.Enabled   = enabled;
             btnFlashCancel.Enabled  = !enabled;  // cancel enabled when flashing
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  SCK-2400 BUILD / CLEAN / FLASH
+        //  Uses CCS v20 headless build (ccs-serverc.exe) and
+        //  SmartRF Flash Programmer 2 CLI (srfprog.exe).
+        //  Board role (GS/Remote) sets SCK_APID_THIS_BOARD via
+        //  -DSCK_APID_THIS_BOARD=0x010|0x011|0x012 predefined symbol.
+        //  RF power patches TX_POWER define in radio.h before build.
+        // ══════════════════════════════════════════════════════════════════
+
+        // SCK-2400 tool paths — persisted in appsettings.json
+        // Defaults point to standard TI install locations.
+        // Customers with different install paths can override via Browse buttons (TODO: add browse buttons).
+        private string _sck2400CcsServer  = @"C:\ti\ccs2051\ccs\eclipse\ccs-serverc.exe";
+        private string _sck2400SrfProg    = @"C:\Program Files (x86)\Texas Instruments\SmartRF Tools\Flash Programmer 2\bin\srfprog.exe";
+        private string _sck2400Workspace  = @"C:\Users\maxor\workspace_ccstheia";
+        private string _sck2400XdsDfu     = @"C:\ti\ccs2051\ccs\ccs_base\common\uscif\xds110\xdsdfu.exe";
+        private const  string SCK2400_PROJECT = "sck2400_firmware";
+
+        private string SCK2400_CCS_SERVER { get => _sck2400CcsServer; set { _sck2400CcsServer = value; SaveSettings(); } }
+        private string SCK2400_SRFPROG    { get => _sck2400SrfProg;   set { _sck2400SrfProg   = value; SaveSettings(); } }
+        private string SCK2400_WORKSPACE  { get => _sck2400Workspace;  set { _sck2400Workspace  = value; SaveSettings(); } }
+        private string SCK2400_XDSDFU     { get => _sck2400XdsDfu;    set { _sck2400XdsDfu    = value; SaveSettings(); } }
+
+        // Board role APID values — match ccsds.h SCK_APID_BOARD_* defines
+        private static readonly (string Label, string Define)[] SCK2400_BOARD_ROLES =
+        {
+            ("GS Board  (APID 0x010)", "0x010"),
+            ("Remote 1  (APID 0x011)", "0x011"),
+            ("Remote 2  (APID 0x012)", "0x012"),
+        };
+
+        private string Sck2400BoardApid =>
+            SCK2400_BOARD_ROLES[Math.Max(0,
+                Math.Min(cmbBoardRole.SelectedIndex, SCK2400_BOARD_ROLES.Length - 1))].Define;
+
+        private string Sck2400BoardLabel =>
+            SCK2400_BOARD_ROLES[Math.Max(0,
+                Math.Min(cmbBoardRole.SelectedIndex, SCK2400_BOARD_ROLES.Length - 1))].Label;
+
+        private async Task RunBuildAsync_SCK2400(bool cleanFirst = false)
+        {
+            if (!PatchRadioHPower_SCK2400()) return;
+            if (!PatchCcsdsHBoard_SCK2400()) return;
+            if (!PatchSecurityH()) return;
+
+            SetFirmwareButtons(false);
+            lblFlashStatus.Text = "Building SCK-2400...";
+            pbFlash.Style       = ProgressBarStyle.Marquee;
+
+            string apid      = Sck2400BoardApid;
+            string boardLabel = Sck2400BoardLabel.Trim();
+            string buildType  = cleanFirst ? "full" : "incremental";
+
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+            Log($"  SCK-2400 Build  →  {boardLabel}", Theme.Cyan);
+            Log($"  SCK_APID_THIS_BOARD = {apid}", Theme.Cyan);
+            Log($"  Build type: {buildType}", Theme.Cyan);
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+
+            try
+            {
+                // Pass board address as predefined symbol so no source edit needed.
+                // CCS passes -DSCK_APID_THIS_BOARD=0x010 etc to tiarmclang via
+                // the project's predefined symbols list merged with CLI args.
+                // The #ifndef guard in ccsds.h means this overrides the default.
+                string args = string.Join(" ", new[]
+                {
+                    "-noSplash",
+                    $"-data \"{SCK2400_WORKSPACE}\"",
+                    "-application com.ti.ccs.apps.buildProject",
+                    $"-ccs.projects {SCK2400_PROJECT}",
+                    "-ccs.configuration Debug",
+                    $"-ccs.buildType {buildType}",
+                    "-ccs.listProblems",
+                });
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = SCK2400_CCS_SERVER,
+                    Arguments              = args,
+                    WorkingDirectory       = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug"),
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+
+                // Stream output lines as they arrive
+                var stdoutTask = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await proc.StandardOutput.ReadLineAsync()) != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                        {
+                            Color c = line.Contains("error") || line.Contains("Error")
+                                ? Theme.Red
+                                : line.Contains("warning") || line.Contains("Warning")
+                                    ? Theme.Yellow
+                                    : Theme.White;
+                            Log(line.Trim(), c);
+                        }
+                    }
+                });
+                var stderrTask = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await proc.StandardError.ReadLineAsync()) != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                            Log(line.Trim(), Theme.Yellow);
+                    }
+                });
+
+                await Task.WhenAll(stdoutTask, stderrTask);
+                await Task.Run(() => proc.WaitForExit());
+
+                string hex = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug",
+                    $"{SCK2400_PROJECT}.hex");
+
+                if (proc.ExitCode == 0 && File.Exists(hex))
+                {
+                    txtFirmwareFile.Text = hex;
+                    Log($"✓ Build succeeded: {hex}", Theme.Green);
+                    Log($"  Board: {boardLabel}  APID: {apid}", Theme.Cyan);
+
+                    // ── OAD post-build: auto-patch prgEntry ──────────────────
+                    // Read .oad_entry_vec address from the linker map file.
+                    // Patch oad_image_header_app.c, delete its .o, rebuild once.
+                    bool oadPatchOk = await PatchOadPrgEntryAsync(hex);
+                    if (!oadPatchOk)
+                    {
+                        Log("⚠ OAD prgEntry patch failed — firmware may not boot via BIM.", Theme.Yellow);
+                        lblFlashStatus.Text = $"Build OK — {boardLabel} — OAD patch FAILED.";
+                    }
+                    else
+                    {
+                        lblFlashStatus.Text = $"Build OK — {boardLabel} — ready to flash.";
+                    }
+                }
+                else if (proc.ExitCode != 0)
+                {
+                    Log($"✗ Build FAILED (exit {proc.ExitCode})", Theme.Red);
+                    lblFlashStatus.Text = "Build failed — check log.";
+                }
+                else
+                {
+                    Log("✗ Build OK but .hex not found — check post-build step.", Theme.Red);
+                    lblFlashStatus.Text = "Build OK but .hex missing.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Build exception: {ex.Message}", Theme.Red);
+                lblFlashStatus.Text = "Build error.";
+            }
+            finally
+            {
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                pbFlash.Value = 0;
+            }
+        }
+
+        private void RunClean_SCK2400()
+        {
+            string debugDir = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug");
+            if (!Directory.Exists(debugDir))
+            { Log("Debug folder not found — nothing to clean.", Theme.Gray); return; }
+
+            string[] extensions = { "*.o", "*.d_raw", "*.map", "*.xml", "*.out" };
+            int deleted = 0;
+            try
+            {
+                foreach (string ext in extensions)
+                    foreach (string f in Directory.GetFiles(debugDir, ext, SearchOption.AllDirectories))
+                    { File.Delete(f); deleted++; }
+
+                // Remove hex so stale flash is impossible
+                string hex = Path.Combine(debugDir, $"{SCK2400_PROJECT}.hex");
+                if (File.Exists(hex)) { File.Delete(hex); deleted++; }
+
+                Log($"SCK-2400 clean: {deleted} files removed from Debug\\", Theme.Cyan);
+                lblFlashStatus.Text = "Cleaned — ready to build.";
+            }
+            catch (Exception ex) { Log($"Clean error: {ex.Message}", Theme.Red); }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  OAD POST-BUILD: AUTO-PATCH prgEntry IN oad_image_header_app.c
+        //  After each firmware build, read the .oad_entry_vec section
+        //  address directly from the linker map file.  This is exact and
+        //  immune to changes in firmware layout.
+        //  Patch the .prgEntry field and rebuild incrementally so the
+        //  header is always correct without manual intervention.
+        //
+        //  Why map file, not hex scan:
+        //    The linker places .oad_entry_vec wherever it fits after all
+        //    other sections.  Its address grows as firmware grows and is
+        //    not predictable.  The map file records the exact final address
+        //    of every section — reading it directly is the correct approach.
+        // ══════════════════════════════════════════════════════════════════
+        private async Task<bool> PatchOadPrgEntryAsync(string firmwareHex)
+        {
+            string projDir  = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT);
+            string debugDir = Path.Combine(projDir, "Debug");
+            string mapFile  = Path.Combine(debugDir, $"{SCK2400_PROJECT}.map");
+            string hdrSrc   = Path.Combine(projDir, "oad_image_header_app.c");
+            string hdrObj   = Path.Combine(debugDir, "oad_image_header_app.o");
+
+            if (!File.Exists(mapFile))
+            {
+                Log("OAD patch: map file not found — skipping.", Theme.Yellow);
+                return false;
+            }
+            if (!File.Exists(hdrSrc))
+            {
+                Log("OAD patch: oad_image_header_app.c not found — skipping.", Theme.Yellow);
+                return false;
+            }
+
+            // ── Step 1: find .oad_entry_vec address in map file ──────────
+            // TI Clang linker map format for a section looks like:
+            //
+            //   .oad_entry_vec
+            //   *          0    0000d33c    00000008
+            //                     0000d33c    00000008     oad_image_header_app.o (.oad_entry_vec)
+            //
+            // The section name appears alone on one line; the origin address
+            // appears as the 4th whitespace-delimited token on the NEXT
+            // non-empty line (format: * / page / origin / length).
+            // Addresses have no 0x prefix — pure 8-digit hex.
+            //
+            // We also check the summary table at the top of the map which has:
+            //   0000d33c    0000d33c    00000008   00000008    r-- .oad_entry_vec
+            // where the address is the first token and section name is last.
+            Log("OAD patch: reading oad_entry_vec address from map file...", Theme.Gray);
+
+            uint? entryVecAddr = null;
+            try
+            {
+                string[] mapLines = File.ReadAllLines(mapFile);
+
+                // Strategy A: summary table line — "hhhhhhhh ... .oad_entry_vec"
+                var summaryRe = new System.Text.RegularExpressions.Regex(
+                    @"^\s*([0-9a-fA-F]{8})\s+[0-9a-fA-F]{8}\s+[0-9a-fA-F]{8}\s+[0-9a-fA-F]{8}\s+\S+\s+\.oad_entry_vec\s*$");
+
+                for (int i = 0; i < mapLines.Length && entryVecAddr == null; i++)
+                {
+                    var m = summaryRe.Match(mapLines[i]);
+                    if (!m.Success) continue;
+                    uint candidate = Convert.ToUInt32(m.Groups[1].Value, 16);
+                    if (candidate >= 0x4000 && candidate <= 0x1FFFF)
+                    {
+                        entryVecAddr = candidate;
+                        Log($"OAD patch: oad_entry_vec at 0x{candidate:X8} (summary table)", Theme.Cyan);
+                    }
+                }
+
+                // Strategy B: section allocation block — ".oad_entry_vec" on one
+                // line, origin address as 3rd token on the next non-empty line.
+                // Line format:  *          0    0000d33c    00000008
+                var originRe = new System.Text.RegularExpressions.Regex(
+                    @"^\s*\*\s+\d+\s+([0-9a-fA-F]{8})\s+[0-9a-fA-F]{8}");
+
+                for (int i = 0; i < mapLines.Length - 1 && entryVecAddr == null; i++)
+                {
+                    if (!mapLines[i].TrimEnd().EndsWith(".oad_entry_vec")) continue;
+                    // Find the next non-empty line
+                    for (int j = i + 1; j < mapLines.Length; j++)
+                    {
+                        if (string.IsNullOrWhiteSpace(mapLines[j])) continue;
+                        var m = originRe.Match(mapLines[j]);
+                        if (!m.Success) break;
+                        uint candidate = Convert.ToUInt32(m.Groups[1].Value, 16);
+                        if (candidate >= 0x4000 && candidate <= 0x1FFFF)
+                        {
+                            entryVecAddr = candidate;
+                            Log($"OAD patch: oad_entry_vec at 0x{candidate:X8} (section block)", Theme.Cyan);
+                        }
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"OAD patch: map parse error: {ex.Message}", Theme.Red);
+                return false;
+            }
+
+            if (entryVecAddr == null)
+            {
+                Log("OAD patch: oad_entry_vec not found in map — prgEntry not updated.", Theme.Yellow);
+                Log("OAD patch: check that .oad_entry_vec section is defined in oad_image_header_app.c", Theme.Yellow);
+                return false;
+            }
+
+            // ── Step 2: compute image length from map, then patch oad_image_header_app.c ──
+            //
+            // BIM validates: prgEntry in [startAddr, startAddr + len]
+            // so .len must cover the entire image including .oad_entry_vec.
+            // We compute len by finding the highest (origin + size) across all
+            // flash sections in the summary table, then subtracting 0x4000.
+            // Summary table line format (leading 2-space indent on subsections):
+            //   hhhhhhhh  hhhhhhhh  hhhhhhhh  hhhhhhhh  flags  [section]
+            uint imageLen = 0;
+            try
+            {
+                var sectionRe = new System.Text.RegularExpressions.Regex(
+                    @"^\s{2}([0-9a-fA-F]{8})\s+[0-9a-fA-F]{8}\s+([0-9a-fA-F]{8})\s+[0-9a-fA-F]{8}\s+\S");
+                uint highWater = 0;
+                foreach (string ml in File.ReadAllLines(mapFile))
+                {
+                    var m = sectionRe.Match(ml);
+                    if (!m.Success) continue;
+                    uint origin = Convert.ToUInt32(m.Groups[1].Value, 16);
+                    uint size   = Convert.ToUInt32(m.Groups[2].Value, 16);
+                    // Flash sections only: 0x4000–0x51FFF (app only).
+                    // Exclude NVS (0x52000+), CCFG (0x56000+), RAM (0x20000000+).
+                    // NVS is NOLOAD but appears in map -- must exclude or image
+                    // length grows to cover NVS and BIM erases it on OAD.
+                    if (origin < 0x4000 || origin >= 0x52000) continue;
+                    uint end = origin + size;
+                    if (end > highWater) highWater = end;
+                }
+                if (highWater > 0x4000)
+                {
+                    imageLen = highWater - 0x4000;
+                    Log($"OAD patch: computed image len = 0x{imageLen:X8} (end=0x{highWater:X8})", Theme.Cyan);
+                }
+                else
+                {
+                    Log("OAD patch: could not compute image length from map — len not patched.", Theme.Yellow);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"OAD patch: len compute error: {ex.Message}", Theme.Yellow);
+                // Non-fatal — prgEntry patch still proceeds
+            }
+
+            try
+            {
+                string src           = File.ReadAllText(hdrSrc);
+                string newPrgEntry   = $"0x{entryVecAddr.Value:X8}";
+
+                // Patch .prgEntry
+                string patched = System.Text.RegularExpressions.Regex.Replace(
+                    src,
+                    @"(\.prgEntry\s*=\s*)0x[0-9a-fA-F]+",
+                    $"${{1}}{newPrgEntry}");
+                if (patched == src)
+                    Log($"OAD patch: .prgEntry already {newPrgEntry} or pattern not found.", Theme.Gray);
+                else
+                    Log($"OAD patch: .prgEntry updated to {newPrgEntry}", Theme.Green);
+
+                // Patch .len if we have a valid computed value
+                if (imageLen > 0)
+                {
+                    string newLen    = $"0x{imageLen:X8}";
+                    string patchedLen = System.Text.RegularExpressions.Regex.Replace(
+                        patched,
+                        @"(\.len\s*=\s*)0x[0-9a-fA-F]+",
+                        $"${{1}}{newLen}");
+                    if (patchedLen == patched)
+                        Log($"OAD patch: .len already {newLen} or pattern not found.", Theme.Gray);
+                    else
+                    {
+                        patched = patchedLen;
+                        Log($"OAD patch: .len updated to {newLen}", Theme.Green);
+                    }
+                }
+
+                File.WriteAllText(hdrSrc, patched);
+            }
+            catch (Exception ex)
+            {
+                Log($"OAD patch: failed to patch source: {ex.Message}", Theme.Red);
+                return false;
+            }
+
+            // ── Step 3: delete stale .o and rebuild incrementally ────────
+            try
+            {
+                if (File.Exists(hdrObj))
+                {
+                    File.Delete(hdrObj);
+                    Log("OAD patch: deleted stale oad_image_header_app.o", Theme.Gray);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"OAD patch: could not delete .o: {ex.Message}", Theme.Yellow);
+            }
+
+            Log("OAD patch: incremental rebuild to bake prgEntry...", Theme.Gray);
+            try
+            {
+                string args = string.Join(" ", new[]
+                {
+                    "-noSplash",
+                    $"-data \"{SCK2400_WORKSPACE}\"",
+                    "-application com.ti.ccs.apps.buildProject",
+                    $"-ccs.projects {SCK2400_PROJECT}",
+                    "-ccs.configuration Debug",
+                    "-ccs.buildType incremental",
+                    "-ccs.listProblems",
+                });
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = SCK2400_CCS_SERVER,
+                    Arguments              = args,
+                    WorkingDirectory       = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug"),
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+                var outTask = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await proc.StandardOutput.ReadLineAsync()) != null)
+                        if (!string.IsNullOrWhiteSpace(line)) Log(line.Trim(), Theme.White);
+                });
+                var errTask = Task.Run(async () =>
+                {
+                    string? line;
+                    while ((line = await proc.StandardError.ReadLineAsync()) != null)
+                        if (!string.IsNullOrWhiteSpace(line)) Log(line.Trim(), Theme.Yellow);
+                });
+                await Task.WhenAll(outTask, errTask);
+                await Task.Run(() => proc.WaitForExit());
+
+                if (proc.ExitCode == 0)
+                {
+                    Log($"OAD patch: rebuild OK — prgEntry = 0x{entryVecAddr.Value:X8}", Theme.Green);
+                    return true;
+                }
+                else
+                {
+                    Log($"OAD patch: rebuild failed (exit {proc.ExitCode})", Theme.Red);
+                    return false;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"OAD patch: rebuild exception: {ex.Message}", Theme.Red);
+                return false;
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  MERGE BIM + FIRMWARE HEX
+        //  Produces a single Intel HEX containing both BIM (0x00000000)
+        //  and the OAD firmware (0x00004000+) for single-pass flashing.
+        // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
+        //  FLASH BIM ONLY — ONE-TIME BOARD PROVISIONING
+        //  Flashes only the BIM hex to pages 0-1 with -e all.
+        //  Use once per board at the factory. After this, BIM is permanent
+        //  and all firmware updates use the normal merged-hex Flash button.
+        // ══════════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════════
+        //  FLASH BIM ONLY — ONE-TIME BOARD PROVISIONING
+        // ══════════════════════════════════════════════════════════════════
+        private async Task RunFlashBimAsync()
+        {
+            string bimHex = Path.Combine(SCK2400_WORKSPACE, "sck2400_bim", "Debug", "sck2400_bim.hex");
+            if (!File.Exists(bimHex))
+            {
+                Log($"BIM hex not found: {bimHex}", Theme.Red);
+                Log("Build BIM first using build_bim.bat in sck2400_bim\\", Theme.Yellow);
+                return;
+            }
+            if (!File.Exists(SCK2400_SRFPROG))
+            {
+                Log($"srfprog.exe not found: {SCK2400_SRFPROG}", Theme.Red);
+                return;
+            }
+
+            SetFirmwareButtons(false);
+            lblFlashStatus.Text = "Detecting XDS110...";
+            pbFlash.Style = ProgressBarStyle.Marquee;
+
+            string? xdsSerial = await DetectXds110SerialAsync();
+            if (xdsSerial == null)
+            {
+                Log("Flash BIM aborted — no XDS110 detected.", Theme.Red);
+                lblFlashStatus.Text = "Flash aborted — no debugger found.";
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                return;
+            }
+
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+            Log("  SCK-2400 Flash BIM — One-Time Provisioning", Theme.Cyan);
+            Log($"  XDS110: {xdsSerial}", Theme.Cyan);
+            Log($"  BIM: {bimHex}", Theme.Cyan);
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+
+            lblFlashStatus.Text = "Flashing BIM...";
+
+            try
+            {
+                string args = $"-t soc(XDS-{xdsSerial}, CC1352P) -e all -p all -v rb -f \"{bimHex}\"";
+                Log($"srfprog {args}", Theme.Gray);
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = SCK2400_SRFPROG,
+                    Arguments              = args,
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+                string stdout = await proc.StandardOutput.ReadToEndAsync();
+                string stderr = await proc.StandardError.ReadToEndAsync();
+                await Task.Run(() => proc.WaitForExit());
+
+                foreach (string line in stdout.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)))
+                    Log(line.Trim(),
+                        line.Contains("ERROR") || line.Contains("Failed") ? Theme.Red :
+                        line.Contains("OK") ? Theme.Green : Theme.White);
+
+                foreach (string line in stderr.Split('\n').Where(l => !string.IsNullOrWhiteSpace(l)))
+                    Log(line.Trim(), Theme.Yellow);
+
+                if (proc.ExitCode == 0)
+                {
+                    Log("BIM flashed successfully — board provisioned.", Theme.Green);
+                    Log("  Flash firmware now using the normal Flash button.", Theme.Cyan);
+                    lblFlashStatus.Text = "BIM flashed — ready for firmware.";
+                }
+                else
+                {
+                    Log($"BIM flash FAILED (exit {proc.ExitCode})", Theme.Red);
+                    lblFlashStatus.Text = "BIM flash failed — check log.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"BIM flash exception: {ex.Message}", Theme.Red);
+                lblFlashStatus.Text = "BIM flash error.";
+            }
+            finally
+            {
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                pbFlash.Value = 0;
+            }
+        }
+
+                private bool MergeBimFirmwareHex(string bimHexPath, string fwHexPath, string outPath)
+        {
+            try
+            {
+                var data = new SortedDictionary<uint, byte>();
+
+                void LoadHex(string path)
+                {
+                    uint hi = 0;
+                    foreach (string line in File.ReadAllLines(path))
+                    {
+                        if (line.Length < 9 || line[0] != ':') continue;
+                        int  cnt  = Convert.ToInt32(line.Substring(1, 2), 16);
+                        uint addr = Convert.ToUInt32(line.Substring(3, 4), 16) + hi;
+                        int  rt   = Convert.ToInt32(line.Substring(7, 2), 16);
+                        if (rt == 0)
+                            for (int i = 0; i < cnt; i++)
+                                data[addr + (uint)i] = Convert.ToByte(line.Substring(9 + i * 2, 2), 16);
+                        else if (rt == 4)
+                            hi = Convert.ToUInt32(line.Substring(9, 4), 16) << 16;
+                    }
+                }
+
+                LoadHex(bimHexPath);
+                LoadHex(fwHexPath);
+
+                byte Checksum(string body)
+                {
+                    int s = 0;
+                    for (int i = 0; i < body.Length; i += 2)
+                        s += Convert.ToInt32(body.Substring(i, 2), 16);
+                    return (byte)((~s + 1) & 0xFF);
+                }
+
+                using var sw = new StreamWriter(outPath);
+                uint curHi = 0xFFFFFFFF;
+                var keys   = data.Keys.ToList();
+                int ki     = 0;
+
+                while (ki < keys.Count)
+                {
+                    uint addr = keys[ki];
+                    uint hi   = (addr >> 16) & 0xFFFF;
+
+                    if (hi != curHi)
+                    {
+                        curHi = hi;
+                        string body = $"02000004{hi:X4}";
+                        sw.WriteLine($":{body}{Checksum(body):X2}");
+                    }
+
+                    // Collect up to 16 contiguous bytes in same 64KB page
+                    var chunk = new List<byte>();
+                    while (ki < keys.Count && chunk.Count < 16)
+                    {
+                        if (chunk.Count > 0 && keys[ki] != addr + (uint)chunk.Count) break;
+                        if ((keys[ki] >> 16) != hi) break;
+                        chunk.Add(data[keys[ki]]);
+                        ki++;
+                    }
+
+                    uint low = addr & 0xFFFF;
+                    string recBody = $"{chunk.Count:X2}{low:X4}00" + string.Concat(chunk.Select(b => $"{b:X2}"));
+                    sw.WriteLine($":{recBody}{Checksum(recBody):X2}");
+                }
+
+                sw.WriteLine(":00000001FF");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"Hex merge error: {ex.Message}", Theme.Red);
+                return false;
+            }
+        }
+
+        // Auto-detect XDS110 serial number using xdsdfu -e.
+        // Parses "Serial Num:   XXXXXXXX" from output.
+        // Returns null if no device found or xdsdfu not available.
+        private async Task<string?> DetectXds110SerialAsync()
+        {
+            if (!File.Exists(SCK2400_XDSDFU))
+            {
+                Log($"xdsdfu.exe not found at: {SCK2400_XDSDFU}", Theme.Red);
+                return null;
+            }
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = SCK2400_XDSDFU,
+                    Arguments              = "-e",
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+                string output = await proc.StandardOutput.ReadToEndAsync();
+                await Task.Run(() => proc.WaitForExit());
+
+                // Parse "Serial Num:   L4300491" — works for any XDS110
+                var match = System.Text.RegularExpressions.Regex.Match(
+                    output, @"Serial Num:\s+(\S+)");
+                if (match.Success)
+                {
+                    string serial = match.Groups[1].Value.Trim();
+                    Log($"XDS110 detected: Serial = {serial}", Theme.Cyan);
+                    return serial;
+                }
+
+                Log("No XDS110 device found — is the LaunchPad connected?", Theme.Red);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Log($"xdsdfu error: {ex.Message}", Theme.Red);
+                return null;
+            }
+        }
+
+        private async Task RunFlashLocal_SCK2400(string? hexPath = null)
+        {
+            hexPath ??= txtFirmwareFile.Text.Trim();
+            if (!File.Exists(hexPath))
+            { Log("HEX file not found — build first.", Theme.Red); return; }
+            if (!File.Exists(SCK2400_SRFPROG))
+            { Log($"srfprog.exe not found at: {SCK2400_SRFPROG}", Theme.Red);
+              Log("Install SmartRF Flash Programmer 2 from ti.com/tool/FLASH-PROGRAMMER-2", Theme.Yellow);
+              return; }
+
+            string boardLabel = Sck2400BoardLabel.Trim();
+
+            SetFirmwareButtons(false);
+            lblFlashStatus.Text = "Detecting XDS110...";
+            pbFlash.Style       = ProgressBarStyle.Marquee;
+
+            // Auto-detect XDS110 serial number
+            string? xdsSerial = await DetectXds110SerialAsync();
+            if (xdsSerial == null)
+            {
+                Log("Flash aborted — no XDS110 detected.", Theme.Red);
+                lblFlashStatus.Text = "Flash aborted — no debugger found.";
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                return;
+            }
+
+            // ── OAD: merge BIM + firmware hex before flashing ────────────
+            // BIM lives at 0x00000000, firmware at 0x00004000.
+            // srfprog -e all erases everything then programs the merged image
+            // in one pass — avoids BIM being wiped by a later firmware flash.
+            string flashHex = hexPath;
+            string bimHex   = Path.Combine(SCK2400_WORKSPACE, "sck2400_bim", "Debug", "sck2400_bim.hex");
+            if (File.Exists(bimHex))
+            {
+                string mergedHex = Path.Combine(SCK2400_WORKSPACE, "sck2400_merged.hex");
+                bool merged = MergeBimFirmwareHex(bimHex, hexPath, mergedHex);
+                if (merged)
+                {
+                    flashHex = mergedHex;
+                    Log($"\u2713 Merged BIM + firmware \u2192 {mergedHex}", Theme.Cyan);
+                }
+                else
+                {
+                    Log("\u26a0 Hex merge failed — flashing firmware only (BIM not included).", Theme.Yellow);
+                }
+            }
+            else
+            {
+                Log($"\u26a0 BIM hex not found at {bimHex} — flashing firmware only.", Theme.Yellow);
+            }
+
+            lblFlashStatus.Text = "Flashing...";
+
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+            Log($"  SCK-2400 Local Flash  →  {boardLabel}", Theme.Cyan);
+            Log($"  XDS110: {xdsSerial}", Theme.Cyan);
+            Log($"  HEX: {flashHex}", Theme.Cyan);
+            Log("══════════════════════════════════════════════════", Theme.Cyan);
+
+            try
+            {
+                // Use -e all to fully erase before programming merged BIM+firmware.
+                // -e pif is NOT used because it would erase BIM pages.
+                string args = $"-t soc(XDS-{xdsSerial}, CC1352P) -e all -p all -v rb -f \"{flashHex}\"";
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = SCK2400_SRFPROG,
+                    Arguments              = args,
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+
+                Log($"srfprog {args}", Theme.Gray);
+
+                using var proc = new Process { StartInfo = psi };
+                proc.Start();
+                string stdout = await proc.StandardOutput.ReadToEndAsync();
+                string stderr = await proc.StandardError.ReadToEndAsync();
+                await Task.Run(() => proc.WaitForExit());
+
+                foreach (string line in stdout.Split('\n')
+                    .Where(l => !string.IsNullOrWhiteSpace(l)))
+                    Log(line.Trim(),
+                        line.Contains("ERROR") || line.Contains("Failed") ? Theme.Red :
+                        line.Contains("OK") || line.Contains("success") || line.Contains("done") ? Theme.Green :
+                        Theme.White);
+
+                foreach (string line in stderr.Split('\n')
+                    .Where(l => !string.IsNullOrWhiteSpace(l)))
+                    Log(line.Trim(), Theme.Yellow);
+
+                if (proc.ExitCode == 0)
+                {
+                    Log($"✓ Flash complete — {boardLabel}", Theme.Green);
+                    lblFlashStatus.Text = $"Flash OK — {boardLabel}";
+                }
+                else
+                {
+                    Log($"✗ Flash FAILED (exit {proc.ExitCode})", Theme.Red);
+                    lblFlashStatus.Text = "Flash failed — check log.";
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Flash exception: {ex.Message}", Theme.Red);
+                lblFlashStatus.Text = "Flash error.";
+            }
+            finally
+            {
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                pbFlash.Value = 0;
+            }
+        }
+
+        // Patch SCK_APID_THIS_BOARD in ccsds.h before SCK-2400 build.
+        // Replaces the #define SCK_APID_THIS_BOARD line so the correct
+        // board address is baked into the binary — no manual source edit needed.
+        // The #ifndef guard is removed and replaced with a hard #define so
+        // the Makefile -D override pattern is not needed.
+        // Patch security.h with current key fields before SCK-2400 build.
+        // Creates security.h from security_template.h if it doesn't exist,
+        // then writes the three key values from the Provision tab.
+        // Called automatically before every SCK-2400 build if keys are set.
+        private bool PatchSecurityH()
+        {
+            string dir = txtProjectDir.Text.Trim();
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+                return true;  // no project dir -- skip silently
+
+            // Parse keys from Provision tab
+            byte[]? k0 = ParseProvKey(txtProvKey0?.Text ?? "", "Key 0");
+            byte[]? k1 = ParseProvKey(txtProvKey1?.Text ?? "", "Key 1");
+            byte[]? k2 = ParseProvKey(txtProvKey2?.Text ?? "", "Key 2");
+
+            // If any key is the placeholder 0xFF*16, skip patching
+            bool allPlaceholder = k0 != null && k1 != null && k2 != null &&
+                k0.All(b => b == 0xFF) && k1.All(b => b == 0xFF) && k2.All(b => b == 0xFF);
+            if (k0 == null || k1 == null || k2 == null || allPlaceholder)
+            {
+                Log("security.h: using placeholder keys (0xFF×16) — set real keys in Provision tab for production", Theme.Yellow);
+                return true;  // not a fatal error -- bench testing with placeholder keys is fine
+            }
+
+            string? secH = Directory.GetFiles(dir, "security.h", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (secH == null)
+            {
+                // Try to create from template
+                string? tmpl = Directory.GetFiles(dir, "security_template.h", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (tmpl != null)
+                {
+                    File.Copy(tmpl, Path.Combine(Path.GetDirectoryName(tmpl)!, "security.h"));
+                    secH = Path.Combine(Path.GetDirectoryName(tmpl)!, "security.h");
+                    Log("security.h: created from security_template.h", Theme.Cyan);
+                }
+                else
+                {
+                    Log("security.h not found and no template available — skipping key patch", Theme.Yellow);
+                    return true;
+                }
+            }
+
+
+
+            try
+            {
+                string content = File.ReadAllText(secH);
+                // Replace each key macro block using regex
+                // Build the new key macro text for each key and do a simple
+                // line-by-line replacement rather than regex to avoid escape issues.
+                content = ReplaceKeyMacro(content, "SCK_AES_KEY_0", k0);
+                content = ReplaceKeyMacro(content, "SCK_AES_KEY_1", k1);
+                content = ReplaceKeyMacro(content, "SCK_AES_KEY_2", k2);
+                File.WriteAllText(secH, content);
+                Log($"security.h: patched with production keys from Provision tab", Theme.Green);
+                Log($"  Key 0: {txtProvKey0.Text[..8]}...{txtProvKey0.Text[^8..]}", Theme.Gray);
+                Log($"  Key 1: {txtProvKey1.Text[..8]}...{txtProvKey1.Text[^8..]}", Theme.Gray);
+                Log($"  Key 2: {txtProvKey2.Text[..8]}...{txtProvKey2.Text[^8..]}", Theme.Gray);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"security.h patch failed: {ex.Message}", Theme.Red);
+                return false;
+            }
+        }
+
+        // Replace a #define SCK_AES_KEY_N { ... } block in security.h
+        // with new key bytes. Works line-by-line to avoid regex escape complexity.
+        private static string ReplaceKeyMacro(string content, string macroName, byte[] key)
+        {
+            var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None).ToList();
+            // Find the #define line for this key
+            int startIdx = -1;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(
+                    lines[i], @"^\s*#define\s+" + macroName + @"\s*\{"))
+                {
+                    startIdx = i;
+                    break;
+                }
+            }
+            if (startIdx < 0) return content;  // macro not found, leave unchanged
+
+            // Find the closing brace line (handles multi-line macro with backslash continuation)
+            int endIdx = startIdx;
+            for (int i = startIdx; i < Math.Min(startIdx + 8, lines.Count); i++)
+            {
+                if (lines[i].TrimEnd().EndsWith("}") || lines[i].Contains("}"))
+                {
+                    endIdx = i;
+                    break;
+                }
+            }
+
+            // Build replacement lines as a list to avoid multiline string escaping issues
+            var newLines = new System.Collections.Generic.List<string>
+            {
+                $"#define {macroName}  {{ \\",
+                string.Format("    0x{0:X2},0x{1:X2},0x{2:X2},0x{3:X2},0x{4:X2},0x{5:X2},0x{6:X2},0x{7:X2}, \\",
+                    key[0],key[1],key[2],key[3],key[4],key[5],key[6],key[7]),
+                string.Format("    0x{0:X2},0x{1:X2},0x{2:X2},0x{3:X2},0x{4:X2},0x{5:X2},0x{6:X2},0x{7:X2}  \\",
+                    key[8],key[9],key[10],key[11],key[12],key[13],key[14],key[15]),
+                "}"
+            };
+
+            lines.RemoveRange(startIdx, endIdx - startIdx + 1);
+            lines.InsertRange(startIdx, newLines);
+            return string.Join("\n", lines);
+        }
+
+        private bool PatchCcsdsHBoard_SCK2400()
+        {
+            string dir = txtProjectDir.Text.Trim();
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+            { Log("Select a valid project directory first.", Theme.Red); return false; }
+
+            string? ccsdsH = Directory.GetFiles(dir, "ccsds.h", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (ccsdsH == null)
+            { Log("ccsds.h not found in project directory.", Theme.Red); return false; }
+
+            string apid  = Sck2400BoardApid;
+            string label = Sck2400BoardLabel.Trim();
+
+            try
+            {
+                string[] lines = File.ReadAllLines(ccsdsH);
+                var kept = new System.Collections.Generic.List<string>();
+
+                foreach (var line in lines)
+                {
+                    // Only remove lines that ARE the SCK_APID_THIS_BOARD define
+                    // or are our injected tool comment lines.
+                    // Do NOT remove other macros that reference SCK_APID_THIS_BOARD
+                    // (like SCK_IS_GS_BOARD and CCSDS_IS_FOR_THIS_BOARD).
+                    bool isDefine  = System.Text.RegularExpressions.Regex.IsMatch(
+                        line, @"^\s*#define\s+SCK_APID_THIS_BOARD\b");
+                    bool isComment = line.TrimStart().StartsWith("/* Board address set by ground station");
+                    bool isOldNote = line.TrimStart().StartsWith("* GS board flash:") ||
+                                     line.TrimStart().StartsWith("* Remote board flash:") ||
+                                     line.TrimStart().StartsWith("* The Makefile can also set") ||
+                                     line.TrimStart().StartsWith("* make all BOARD_ADDR") ||
+                                     line.TrimStart().StartsWith("* which overrides this default") ||
+                                     line.TrimStart().StartsWith("* which overrides");
+                    if (isDefine || isComment || isOldNote) continue;
+                    kept.Add(line);
+                }
+
+                // Find the line with SCK_APID_BOARD_BROADCAST and insert after it
+                int insertIdx = -1;
+                for (int i = 0; i < kept.Count; i++)
+                {
+                    if (kept[i].Contains("SCK_APID_BOARD_BROADCAST"))
+                    { insertIdx = i + 1; break; }
+                }
+
+                // Insert two lines: the comment and the define
+                string commentLine = "/* Board address set by ground station build tool — do not edit manually. */";
+                string defineLine  = $"#define SCK_APID_THIS_BOARD         {apid}   /* {label} */";
+
+                if (insertIdx >= 0)
+                {
+                    kept.Insert(insertIdx, defineLine);
+                    kept.Insert(insertIdx, commentLine);
+                    kept.Insert(insertIdx, "");  // blank line before
+                }
+                else
+                {
+                    kept.Add("");
+                    kept.Add(commentLine);
+                    kept.Add(defineLine);
+                }
+
+                // Detect original line ending style
+                string original   = File.ReadAllText(ccsdsH);
+                string lineEnding = original.Contains("\r\n") ? "\r\n" : "\n";
+
+                File.WriteAllText(ccsdsH, string.Join(lineEnding, kept) + lineEnding);
+                Log($"Board: patched ccsds.h → SCK_APID_THIS_BOARD = {apid} ({label})", Theme.Cyan);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to patch ccsds.h: {ex.Message}", Theme.Red);
+                return false;
+            }
+        }
+        // Equivalent to PatchBoardHPower() for SCK-915.
+        // Sets: #define TX_POWER BENCH  or  #define TX_POWER FIELD
+        private bool PatchRadioHPower_SCK2400()
+        {
+            string dir = txtProjectDir.Text.Trim();
+            if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir))
+            { Log("Select a valid project directory first.", Theme.Red); return false; }
+
+            string? radioH = Directory.GetFiles(dir, "radio.h", SearchOption.AllDirectories)
+                .FirstOrDefault();
+            if (radioH == null)
+            { Log("radio.h not found in project directory.", Theme.Red); return false; }
+
+            string pwrValue = rbPowerField.Checked ? "FIELD" : "BENCH";
+            string pwrLabel = rbPowerField.Checked ? "+20 dBm field" : "0 dBm bench";
+
+            try
+            {
+                string content = File.ReadAllText(radioH);
+
+                // Remove any existing TX_POWER override line (prevent duplicates)
+                var cleaned = System.Text.RegularExpressions.Regex.Replace(
+                    content,
+                    @"[ \t]*#define\s+TX_POWER\s+\w+[^\r\n]*(\r?\n)?",
+                    "",
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
+
+                // Insert before the #ifndef TX_POWER guard
+                string insertLine = $"#define TX_POWER {pwrValue}\r\n";
+                if (cleaned.Contains("#ifndef TX_POWER"))
+                {
+                    cleaned = cleaned.Replace("#ifndef TX_POWER",
+                        insertLine + "#ifndef TX_POWER");
+                }
+                else
+                {
+                    // Fallback: append before final #endif
+                    int lastEndif = cleaned.LastIndexOf("#endif");
+                    if (lastEndif >= 0)
+                        cleaned = cleaned.Insert(lastEndif, insertLine);
+                    else
+                        cleaned += "\r\n" + insertLine;
+                }
+
+                File.WriteAllText(radioH, cleaned);
+                Log($"RF Power: patched radio.h → TX_POWER = {pwrValue} ({pwrLabel})", Theme.Cyan);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to patch radio.h: {ex.Message}", Theme.Red);
+                return false;
+            }
         }
 
         private void RunClean()
@@ -2697,6 +4641,38 @@ Max altitude: {maxAlt:F1}m ASL</description>
             lblTelemAge.Text = $"Last update: {DateTime.Now:HH:mm:ss}";
         }
 
+        // ── SCK-2400 CCSDS telemetry display ──────────────────────────────
+        private void UpdateCcsdsTelemDisplay(CcsdsTelemData td)
+        {
+            TimeSpan up = TimeSpan.FromSeconds(td.Uptime);
+            lblUptime.Text   = up.TotalDays >= 1
+                ? $"{(int)up.TotalDays}d {up.Hours:D2}:{up.Minutes:D2}:{up.Seconds:D2}"
+                : $"{up.Hours:D2}:{up.Minutes:D2}:{up.Seconds:D2}";
+            lblRssi.Text     = $"{td.LastRssi} dBm";
+            lblLqi.Text      = td.LastLqi.ToString();
+            lblPktsGood.Text = td.PacketsGood.ToString("N0");
+            lblPktsSent.Text = td.PacketsSent.ToString("N0");
+            lblRejCksum.Text = td.PacketsRejChecksum.ToString("N0");
+            lblRejOther.Text = td.PacketsRejOther.ToString("N0");
+            lblUart0.Text    = td.Uart0RxCount.ToString("N0");
+            lblUart1.Text    = td.Uart1RxCount.ToString("N0");
+            lblRxMode.Text   = td.RxMode == 1 ? "ON" : "OFF";
+            lblTxMode.Text   = td.TxMode == 1 ? "TX" : "IDLE";
+            lblDieTemp.Text  = $"{td.DieTempC:F1} °C";
+            lblSupplyV.Text  = $"{td.SupplyVoltage:F2} V";
+            // LEO fault recovery fields (Session 13)
+            lblResetCounter.Text = td.ResetCounter.ToString();
+            lblResetCounter.ForeColor = td.ResetCounter >= 3 ? Theme.Yellow
+                                      : td.ResetCounter == 0 ? Theme.Green
+                                      : Theme.Silver;
+            lblResetCause.Text   = td.ResetCauseString;
+            lblSafeMode.Text     = td.SafeModeActive ? "SAFE MODE" : "NORMAL";
+            lblSafeMode.ForeColor = td.SafeModeActive ? Theme.Red : Theme.Green;
+            lblUptimeMin.Text    = $"{td.UptimeMinutes} min";
+            lblUptimeMin.ForeColor = td.UptimeMinutes >= 5 ? Theme.Green : Theme.Silver;
+            lblTelemAge.Text = $"Last update: {DateTime.Now:HH:mm:ss}";
+        }
+
         private void BtnTelemAuto_Click(object sender, EventArgs e)
         {
             if (_telemTimer!.Enabled)
@@ -2780,6 +4756,8 @@ Max altitude: {maxAlt:F1}m ASL</description>
         private void Log(string message, Color color)
         {
             if (InvokeRequired) { BeginInvoke(new Action(() => Log(message, color))); return; }
+            // Filter beacon lines when filter is active
+            if (_filterBeacon && (message.Contains("tlm_beacon") || message.Contains("CCSDS RAW"))) return;
             AppLogger.Write(message);
             rtbLog.SelectionStart  = rtbLog.TextLength;
             rtbLog.SelectionLength = 0;
@@ -2823,6 +4801,25 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (InvokeRequired) { BeginInvoke(new Action(() => SetStatus(text, color))); return; }
             lblStatus.Text      = text;
             lblStatus.ForeColor = color;
+        }
+
+        private void UpdateRfStatusLabel()
+        {
+            if (InvokeRequired) { BeginInvoke(new Action(UpdateRfStatusLabel)); return; }
+            if (lblRfStatus == null) return;
+            if (_boardType != BoardType.SCK2400 || _physicalBoardApid == 0)
+            {
+                lblRfStatus.Text      = "";
+                lblRfStatus.ForeColor = Theme.Gray;
+                return;
+            }
+            // Show which board is the GS and which APIDs get RF-encrypted forwarding
+            string gsBoard  = $"0x{_physicalBoardApid:X3}";
+            string rfTarget = _physicalBoardApid == 0x010 ? "→ 0x011 encrypted" :
+                              _physicalBoardApid == 0x011 ? "→ 0x010 encrypted" :
+                              "→ remote encrypted";
+            lblRfStatus.Text      = $"GS: {gsBoard}  RF {rfTarget}";
+            lblRfStatus.ForeColor = Theme.Cyan;
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -2963,23 +4960,57 @@ Max altitude: {maxAlt:F1}m ASL</description>
             lblTransferStatus.Text = "Refreshing...";
             FlushRxQueue();
             WritePacket(OpenLstProtocol.BuildPacket(hwid, seq, 0x20, new byte[] { 0x03 }));
-            var pkt = await WaitForReply(hwid, seq, 10000);
-            if (pkt?.PicoPayload == null)
-            { Log("Files: no response from Pico", Theme.Red); lblTransferStatus.Text = "No response."; return; }
 
-            string response = pkt.PicoPayload;
-            lstFiles.Items.Clear();
-            if (response.StartsWith("LIST:") && response != "LIST:EMPTY")
+            // Accumulate LIST: and LIST+: packets until we get a final chunk
+            // Final chunk = no trailing comma (LIST: without comma = complete list)
+            // Continuation chunk = ends with comma (LIST+: = more to come)
+            var allFiles = new List<string>();
+            bool receivedAny = false;
+
+            for (int attempt = 0; attempt < 10; attempt++)
             {
-                string filesPart = response.Substring(5);
+                var pkt = await WaitForReply(hwid, seq, 5000);
+                if (pkt?.PicoPayload == null) break;
+
+                string response = pkt.PicoPayload;
+
+                if (response == "LIST:EMPTY")
+                { Log("Files: SD card is empty", Theme.Gray); lblTransferStatus.Text = "SD card empty."; return; }
+
+                if (response.StartsWith("LIST:ERR"))
+                { Log($"Files: {response}", Theme.Red); lblTransferStatus.Text = "Error."; return; }
+
+                bool isContinuation = response.StartsWith("LIST+:");
+                bool isFirst        = response.StartsWith("LIST:");
+
+                if (!isFirst && !isContinuation) break;
+
+                // Parse filenames from this chunk
+                string filesPart = response.Substring(isContinuation ? 6 : 5);
                 foreach (string f in filesPart.Split(','))
                     if (!string.IsNullOrWhiteSpace(f))
-                        lstFiles.Items.Add(f.Trim());
+                        allFiles.Add(f.Trim());
+
+                receivedAny = true;
+
+                // If this chunk ends with comma — more packets coming
+                // If no trailing comma — this was the final chunk
+                if (!filesPart.EndsWith(",")) break;
+
+                // Wait for next chunk — use same seq number
+                Log($"Files: received chunk ({allFiles.Count} files so far)...", Theme.Gray);
+            }
+
+            lstFiles.Items.Clear();
+            if (receivedAny && allFiles.Count > 0)
+            {
+                foreach (string f in allFiles)
+                    lstFiles.Items.Add(f);
                 Log($"Files: {lstFiles.Items.Count} file(s) on SD card", Theme.Green);
                 lblTransferStatus.Text = $"{lstFiles.Items.Count} file(s) found.";
             }
-            else
-            { Log("Files: SD card is empty", Theme.Gray); lblTransferStatus.Text = "SD card empty."; }
+            else if (!receivedAny)
+            { Log("Files: no response from Pico", Theme.Red); lblTransferStatus.Text = "No response."; }
         }
 
         private async Task GetSelectedFileAsync()
@@ -3104,20 +5135,17 @@ Max altitude: {maxAlt:F1}m ASL</description>
             var p = tpProvision;
             int lx = 14, row = 12;
 
-            var instrPanel = new Panel { Location = new Point(lx, row), Size = new Size(660, 100), BackColor = Color.FromArgb(16, 24, 16) };
-            DrawBorder(instrPanel);
-            instrPanel.Controls.AddRange(new Control[]
-            {
-                MkLabel("◈  Board Provisioning — What this does:", 10, 8, 500, Theme.Green, Theme.FontMonoBold),
-                MkLabel("1. Patches bootloader hex in memory with your HWID and AES keys", 10, 28, 620, Theme.Silver, Theme.FontSmall),
-                MkLabel("2. Writes patched image to a temp file", 10, 44, 620, Theme.Silver, Theme.FontSmall),
-                MkLabel("3. Calls SmartRF Flash Programmer to erase, program and verify via CC Debugger", 10, 60, 620, Theme.Silver, Theme.FontSmall),
-                MkLabel("⚠  CC Debugger must be plugged in and connected to the target board before flashing", 10, 78, 640, Theme.Yellow, Theme.FontSmall),
-            });
-            p.Controls.Add(instrPanel);
-            row += 114;
+            // Board-aware provisioning description panel.
+            // Stored as field so board selector dropdown can refresh it.
+            _provInstrPanel = new Panel { Location = new Point(lx, row), Size = new Size(660, 124), BackColor = Color.FromArgb(16, 24, 16) };
+            DrawBorder(_provInstrPanel);
+            RefreshProvDescription();
+            p.Controls.Add(_provInstrPanel);
+            row += 126;
 
-            p.Controls.Add(MkSectionLabel("── SmartRF Flash Programmer", lx, row)); row += 28;
+            var lblSmartRf = MkSectionLabel("── SmartRF Flash Programmer", lx, row);
+            p.Controls.Add(lblSmartRf); row += 28;
+            _sck915OnlyControls.Add(lblSmartRf);
 
             p.Controls.Add(MkLabel("Path:", lx, row + 3, 40, Theme.Gray));
             var txtSmartRfPath = new TextBox
@@ -3201,6 +5229,26 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 if (k == 0) txtProvKey0 = tb;
                 else if (k == 1) txtProvKey1 = tb;
                 else txtProvKey2 = tb;
+
+                // 🎲 AutoGen button — generates a cryptographically random 16-byte key
+                int ki = k;
+                var btnGen = MkButton("🎲 Roll", lx + 402, row, 72, Theme.Cyan, Theme.PanelBack);
+                btnGen.Font = Theme.FontSmall;
+                btnGen.Size = new Size(72, 26);
+                btnGen.Click += (s, e) =>
+                {
+                    var rng = System.Security.Cryptography.RandomNumberGenerator.Create();
+                    byte[] key = new byte[16];
+                    rng.GetBytes(key);
+                    string hex = Convert.ToHexString(key).ToLower();
+                    if (ki == 0) txtProvKey0.Text = hex;
+                    else if (ki == 1) txtProvKey1.Text = hex;
+                    else txtProvKey2.Text = hex;
+                    SaveSettings();
+                };
+                tb.TextChanged += (s, e) => SaveSettings();
+                p.Controls.Add(btnGen);
+
                 row += 34;
             }
             row += 6;
@@ -3232,6 +5280,61 @@ Max altitude: {maxAlt:F1}m ASL</description>
             btnProvFlash.FlatAppearance.BorderColor = Color.FromArgb(40, 120, 40);
             btnProvFlash.Click += async (s, e) => await RunProvisionAsync();
             p.Controls.Add(btnProvFlash);
+        }
+
+        private void RefreshProvDescription()
+        {
+            if (_provInstrPanel == null) return;
+            _provInstrPanel.Controls.Clear();
+
+            bool isSck2400 = (_boardType == BoardType.SCK2400);
+            var lines = isSck2400
+                ? new (string text, int y, Color color)[]
+                  {
+                      ("◈  Board Provisioning — What this does:",                               7,  Theme.Green),
+                      ("1. Click 🎲 Roll to generate cryptographically secure AES-128 keys",   30, Theme.Silver),
+                      ("2. Build via Firmware tab — keys auto-patched into security.h",         52, Theme.Silver),
+                      ("3. Flash both boards — they must share the same key set",               74, Theme.Silver),
+                      ("⚠  Keys live only in security.h (gitignored) — back them up safely",   96, Theme.Yellow),
+                  }
+                : new (string text, int y, Color color)[]
+                  {
+                      ("◈  Board Provisioning — What this does:",                               7,  Theme.Green),
+                      ("1. Patches BIM (bootloader) hex in memory with your HWID and AES keys",30, Theme.Silver),
+                      ("2. Writes patched BIM image to a temp file",                            52, Theme.Silver),
+                      ("3. Calls SmartRF Flash Programmer to erase, program and verify",        74, Theme.Silver),
+                      ("⚠  CC Debugger must be plugged in and connected before flashing",       96, Theme.Yellow),
+                  };
+
+            foreach (var (text, y, color) in lines)
+                _provInstrPanel.Controls.Add(MkLabel(text, 10, y, 640, color,
+                    y == 8 ? Theme.FontMonoBold : Theme.FontSmall));
+        }
+
+        // Apply board-specific UI state — grey out controls that don't apply
+        // to the currently selected board type.
+        // Called on board selector change and at startup.
+        private ToolTip _boardTooltip = new ToolTip();
+
+        private void ApplyBoardUi()
+        {
+            bool isSck2400 = (_boardType == BoardType.SCK2400);
+            foreach (var c in _sck2400OnlyControls)
+            {
+                c.Enabled = isSck2400;
+                c.ForeColor = isSck2400 ? Color.FromArgb(0, 200, 200) : Color.FromArgb(80, 80, 80);
+                if (c is Button b)
+                    b.BackColor = isSck2400 ? Color.FromArgb(16, 40, 48) : Color.FromArgb(24, 24, 24);
+                _boardTooltip.SetToolTip(c, isSck2400 ? "" : "SCK-2400 only");
+            }
+            foreach (var c in _sck915OnlyControls)
+            {
+                c.Enabled = !isSck2400;
+                c.ForeColor = !isSck2400 ? Color.FromArgb(0, 200, 200) : Color.FromArgb(80, 80, 80);
+                if (c is Button b)
+                    b.BackColor = !isSck2400 ? Color.FromArgb(16, 40, 48) : Color.FromArgb(24, 24, 24);
+                _boardTooltip.SetToolTip(c, !isSck2400 ? "" : "SCK-915 only");
+            }
         }
 
         private void BtnProvDetect_Click(object sender, EventArgs e)

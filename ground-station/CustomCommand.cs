@@ -39,12 +39,16 @@ namespace OpenLstGroundStation
         // Pre-populated on first run. Users can add/edit/delete from the UI.
         public static List<CustomCommand> Defaults() => new List<CustomCommand>
         {
-            new CustomCommand { Name = "PICO Ping",        Opcode = 0x20, Payload = "00", Notes = "Ping the Pico — expects PICO:ACK" },
-            new CustomCommand { Name = "PICO Read Temp",   Opcode = 0x20, Payload = "01", Notes = "Read onboard temperature sensor" },
-            new CustomCommand { Name = "PICO Snap",        Opcode = 0x20, Payload = "02", Notes = "Trigger camera snapshot" },
-            new CustomCommand { Name = "PICO List Files",  Opcode = 0x20, Payload = "03", Notes = "List files on SD card" },
-            new CustomCommand { Name = "PICO Get File",    Opcode = 0x20, Payload = "04", Notes = "Download file from SD card" },
-            new CustomCommand { Name = "PICO Delete File", Opcode = 0x20, Payload = "05", Notes = "Delete file from SD card" },
+            // SCK-2400: each command has its own CCSDS sub-opcode (0x20-0x29)
+            // The CC1352P bridges CCSDS → ESP framing → Pico main.py
+            new CustomCommand { Name = "PICO Ping",        Opcode = 0x20, Payload = "", Notes = "Ping the Pico — expects PICO:ACK" },
+            new CustomCommand { Name = "PICO Read Temp",   Opcode = 0x21, Payload = "", Notes = "Read onboard temperature sensor — expects TEMP:xx.xxC" },
+            new CustomCommand { Name = "PICO Snap",        Opcode = 0x22, Payload = "", Notes = "Trigger camera snapshot — expects SNAP:OK:filename:bytes" },
+            new CustomCommand { Name = "PICO List Files",  Opcode = 0x23, Payload = "", Notes = "List files on SD card — expects LIST:..." },
+            new CustomCommand { Name = "PICO Get GPS",     Opcode = 0x27, Payload = "", Notes = "Get GPS + baro data — expects GPS:lat,lon,alt,sats,fix,hpa,balt,temp" },
+            new CustomCommand { Name = "PICO Get Baro",    Opcode = 0x28, Payload = "", Notes = "Get barometric data — expects BARO:hpa,alt,temp" },
+            new CustomCommand { Name = "PICO Beacon ON",   Opcode = 0x29, Payload = "01", Notes = "Enable autonomous GPS beacon" },
+            new CustomCommand { Name = "PICO Beacon OFF",  Opcode = 0x29, Payload = "00", Notes = "Disable autonomous GPS beacon" },
         };
 
         public static void Save(List<CustomCommand> commands)

@@ -272,25 +272,42 @@ cam_cs = Pin(15, Pin.OUT, value=1)  # Camera CS — start deselected (HIGH)
 sd_cs  = Pin(17, Pin.OUT, value=1)  # SD CS    — start deselected (HIGH)
 
 # ── SPI1 — SCK-2400 High Speed Payload Interface ──────────────────────────
-# NOT YET IMPLEMENTED — wiring confirmed 2026-06-05, implement when SCK-2400
+# NOT YET IMPLEMENTED — wiring confirmed 2026-07-06, implement when SCK-2400
 # SPI command handler is added to firmware.
 #
 # The SCK-2400 exposes SSI1 on DIO23/24/25/26 as the high-speed payload SPI
-# bus. This Pico connects to it via SPI1 on GPIO10-13, which are currently
-# unused and don't conflict with SPI0 (camera/SD on GPIO16/18/19).
+# bus. Verified against the CC2652P RGZ-48 datasheet pin diagram:
+#   DIO23 = physical pin 36, DIO24 = pin 37, DIO25 = pin 38, DIO26 = pin 39.
+#
+# CORRECTION (2026-07-06): an earlier version of this comment specified
+# GPIO10-13 for this bus. That was wrong on two counts:
+#   1. GPIO10-13 are already claimed by led_camera/led_sd/led_gps/led_alti
+#      above — would have double-driven four pins for two different jobs.
+#   2. A prior draft of this fix also suggested GPIO24 for MISO — GPIO24 is
+#      NOT broken out on the physical Pico header (reserved internally for
+#      VBUS sense, along with GPIO23/SMPS control, GPIO25/onboard LED, and
+#      GPIO29/VSYS ADC sense). Confirmed on hardware — no GPIO24 pin exists
+#      on the board to wire to.
+#
+# Corrected pin mapping (SCK-2400 → Pico), using genuine SPI1-hardware pins
+# that ARE exposed on the Pico header, cross-checked against every other
+# Pin() assignment in this file for conflicts:
 #
 # Pin mapping (SCK-2400 → Pico):
-#   SCK-2400 DIO23 (SSI1 SCLK) → Pico GPIO10 (Pin 14)
-#   SCK-2400 DIO24 (SSI1 PICO) → Pico GPIO11 (Pin 15)  [MOSI]
-#   SCK-2400 DIO25 (SSI1 POCI) → Pico GPIO12 (Pin 16)  [MISO]
-#   SCK-2400 DIO26 (SSI1 CS)   → Pico GPIO13 (Pin 17)
+#   SCK-2400 DIO23 (SSI1 SCLK) → Pico GPIO26 (Pin 31)
+#   SCK-2400 DIO24 (SSI1 PICO) → Pico GPIO27 (Pin 32)  [MOSI]
+#   SCK-2400 DIO25 (SSI1 POCI) → Pico GPIO28 (Pin 34)  [MISO]
+#   SCK-2400 DIO26 (SSI1 CS)   → Pico GPIO22 (Pin 29)
 #
 # When implementing, init with:
 #   spi_sck2400 = SPI(1, baudrate=1000000, polarity=0, phase=0,
-#                     sck=Pin(10), mosi=Pin(11), miso=Pin(12))
-#   sck2400_cs  = Pin(13, Pin.OUT, value=1)
+#                     sck=Pin(26), mosi=Pin(27), miso=Pin(28))
+#   sck2400_cs  = Pin(22, Pin.OUT, value=1)
 #
-# CS follows the same active-low software pattern as cam_cs and sd_cs above.
+# CS is a plain GPIO under software control (same active-low pattern as
+# cam_cs and sd_cs above) — it does not need to be a dedicated hardware
+# SPI1 CSn pin, so GPIO22 was chosen for being free rather than for any
+# SPI-specific capability.
 # SCK-2400 SSI1 is configured Four Pin Active Low in SysConfig.
 # Start at 1MHz and verify signal integrity before increasing speed.
 # [SCK-DEV: SCK2400_SPI] — implement SPI command handler when ready
