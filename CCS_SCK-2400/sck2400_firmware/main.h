@@ -34,7 +34,7 @@
  * --------------------------------------------------------------------- */
 #define SCK2400_FW_VERSION_MAJOR    0
 #define SCK2400_FW_VERSION_MINOR    1
-#define SCK2400_FW_VERSION_PATCH    0
+#define SCK2400_FW_VERSION_PATCH    1
 
 /* -----------------------------------------------------------------------
  * RTOS Task Stack Sizes (bytes)
@@ -61,6 +61,29 @@ extern Task_Handle rfTaskHandle;
 extern Task_Handle uartTaskHandle;
 extern Task_Handle oadTaskHandle;
 extern Task_Handle watchdogTaskHandle;
+
+/* -----------------------------------------------------------------------
+ * Safe Mode Flag
+ * Set by nv_storage_on_boot() if reset_counter >= SCK_SAFE_MODE_THRESHOLD.
+ * Read by uart_task to gate complex operations (OAD, payload commands).
+ * Read by rfTask -- beacon and get_telem always run regardless of safe mode.
+ * Cleared by CMD_CLEAR_SAFE_MODE handler via nv_storage_clear_safe_mode().
+ *
+ * Why a global flag and not a function call on every check?
+ * Safe mode state does not change during normal operation -- it is set
+ * at boot and cleared only by explicit ground station command. A global
+ * volatile bool is the most efficient and readable pattern for a flag
+ * that is checked frequently in the task main loops.
+ *
+ * Extension point: add additional safe mode behaviors here by checking
+ * gSafeMode in the relevant task or handler.
+ * --------------------------------------------------------------------- */
+extern volatile bool gSafeMode;
+
+/* Boot reset cause -- captured in mainThread() from CC1352P hardware register
+ * before any driver init can clear it. Consumed by nv_storage_on_boot()
+ * in watchdogTask on first kick. See nv_storage.c for usage. */
+extern volatile uint8_t gBootResetCause;
 
 /* -----------------------------------------------------------------------
  * RF Forward Queue

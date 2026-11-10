@@ -20,6 +20,7 @@
  * --------------------------------------------------------------------- */
 #include "telemetry.h"
 #include "main.h"
+#include "nv_storage.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -161,6 +162,15 @@ void telemetry_collect(sck_telemetry_t *telem)
     telem->tx_mode           = sTxMode;
     telem->die_temp_raw      = telemetry_read_die_temp();
     telem->supply_mv         = telemetry_read_supply_mv();
+
+    /* LEO fault recovery fields -- sourced from NV storage.
+     * uptime_minutes saturates at 255 (4h15m) which is fine for
+     * clean-run tracking (threshold is 5 minutes). */
+    telem->reset_counter     = nv_storage_get_reset_counter();
+    telem->reset_cause       = nv_storage_get_reset_cause();
+    telem->safe_mode_active  = nv_storage_get_safe_mode() ? 1U : 0U;
+    uint32_t uptime_min      = telemetry_get_uptime_sec() / 60U;
+    telem->uptime_minutes    = (uptime_min > 255U) ? 255U : (uint8_t)uptime_min;
 }
 
 /* -----------------------------------------------------------------------

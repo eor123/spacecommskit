@@ -24,7 +24,11 @@
  *   uint8   tx_mode             -- current TX mode (0=idle, 1=transmitting)
  *   int16   die_temp_raw        -- CC2652P ADC raw temp reading
  *   uint16  supply_mv           -- VDDS supply voltage in millivolts
- *   Total: 32 bytes
+ *   uint8   reset_counter       -- NV reset counter (boots without clean run)
+ *   uint8   reset_cause         -- SCK_RESET_CAUSE_* from last reset
+ *   uint8   safe_mode_active    -- 1 = safe mode active, 0 = normal
+ *   uint8   uptime_minutes      -- minutes since boot (clean run progress)
+ *   Total: 36 bytes
  *
  * Reference: SCK-2400_Firmware_Requirements.md Section 3.2
  *            CcsdsProtocol.cs ParseTelem() -- must match exactly
@@ -63,11 +67,20 @@ typedef struct __attribute__((packed))
     uint8_t  tx_mode;             /* 0=idle, 1=transmitting              */
     int16_t  die_temp_raw;        /* CC2652P ADC raw temp count          */
     uint16_t supply_mv;           /* VDDS supply voltage in millivolts   */
-} sck_telemetry_t;                /* 32 bytes total                      */
+    /* --- LEO fault recovery fields (added Session 12) ---
+     * These four bytes provide ground station visibility into the board's
+     * fault recovery state. The C# ParseTelem() must be updated to match.
+     * Extension point: add further diagnostic fields here as needed --
+     * expand the struct and update the static assert and ParseTelem(). */
+    uint8_t  reset_counter;       /* NV reset counter -- boots without clean run */
+    uint8_t  reset_cause;         /* SCK_RESET_CAUSE_* from last hardware reset  */
+    uint8_t  safe_mode_active;    /* 0=normal operation, 1=safe mode active      */
+    uint8_t  uptime_minutes;      /* minutes since boot -- clean run progress    */
+} sck_telemetry_t;                /* 36 bytes total                      */
 
 /* Verify size at compile time */
-_Static_assert(sizeof(sck_telemetry_t) == 32,
-    "sck_telemetry_t must be 32 bytes -- update CcsdsProtocol.ParseTelem() if changed");
+_Static_assert(sizeof(sck_telemetry_t) == 36,
+    "sck_telemetry_t must be 36 bytes -- update CcsdsProtocol.ParseTelem() in C# if changed");
 
 /* -----------------------------------------------------------------------
  * Public API

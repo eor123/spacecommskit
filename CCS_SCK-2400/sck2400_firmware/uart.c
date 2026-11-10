@@ -40,6 +40,7 @@
 #include "telemetry.h"
 #include "main.h"
 #include "radio.h"
+#include "crypto.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -47,6 +48,9 @@
 
 /* TI-RTOS */
 #include <ti/sysbios/knl/Task.h>
+#include <ti/sysbios/knl/Clock.h>   /* trial-boot timeout */
+#include <stddef.h>                 /* offsetof */
+
 
 /* Driverlib -- SysCtrlSystemReset() for post-OAD reboot */
 #include <ti/devices/DeviceFamily.h>
@@ -67,6 +71,17 @@ extern volatile bool gBeaconEnabled;
  * Set/cleared here alongside sOad.active. */
 extern volatile bool gOadActive;
 
+/* NV storage -- reset counter and safe mode state */
+#include "nv_storage.h"
+
+/* Safe mode flag -- defined in main.c, set by nv_storage_on_boot().
+ * Checked before OAD and payload operations -- blocked in safe mode.
+ * Cleared by CMD_CLEAR_SAFE_MODE via nv_storage_clear_safe_mode(). */
+extern volatile bool gSafeMode;
+
+/* GS board RF forward with optional reply window (main.c, 11/09/26) */
+extern void rf_forward_enqueue_ex(const uint8_t *buf, uint16_t len, bool expectReply);
+
 /* Diagnostic error code from oad_flash_stub.c -- set at each failure point
  * in extFlashOpen() so the ACK payload tells us exactly where it failed. */
 extern uint8_t extFlashLastError(void);
@@ -86,16 +101,49 @@ static bool         sResponseViaRf = false; /* true when responding to RF comman
  * --------------------------------------------------------------------- */
 #define OAD_CHUNK_SIZE      128             /* bytes per RF chunk          */
 
-/* Ext flash OAD layout:
- *   0x000000 (page 0): ExtImageInfo_t metadata header -- BIM reads this
- *   0x001000 (page 1+): image data -- chunks written here by handle_oad_chunk
+/* Ext flash layout (MX25R8035F, 1 MB, 4 KB pages) -- must match the BIM
+ * (bim_offchip_main_local.c, SCK_GOLDEN_MAGIC block). Changed 11/09/26:
+ *   0x000000 page 0  GOLDEN metadata (EFL_ADDR_META_FACT_IMG). Written only
+ *                    by CMD_OAD_SET_GOLDEN; counter == SCK_GOLDEN_MAGIC.
+ *   0x001000 page 1  OAD candidate metadata (handle_oad_end)
+ *   0x002000         OAD candidate image   (handle_oad_chunk)
+ *   0x080000         GOLDEN image          (copy of a confirmed app)
  *
- * OAD_SLOT_OFFSET: base of the OAD slot (metadata page start)
- * OAD_IMG_OFFSET:  where image data starts (must be past metadata page)
- * Erase in handle_oad_start covers from OAD_SLOT_OFFSET for imgSize+4KB
- * to clear both the metadata page and all image data pages. */
-#define OAD_SLOT_OFFSET     0x000000        /* ext flash OAD slot base     */
-#define OAD_IMG_OFFSET      0x001000        /* image data: past metadata   */
+ * Before 11/09 the OAD metadata lived on page 0. handle_oad_start() erases
+ * a leftover non-golden page 0 so the BIM never mistakes it for golden. */
+#define OAD_SLOT_OFFSET     0x001000        /* candidate metadata page     */
+#define OAD_IMG_OFFSET      0x002000        /* candidate image data        */
+#define OAD_GOLD_META       0x000000        /* golden metadata (page 0)    */
+#define OAD_GOLD_IMG        0x080000        /* golden image                */
+#define OAD_EFL_SECTOR      0x1000
+
+/* Internal flash app region (BIM at 0x0, app + OAD header at 0x4000,
+ * NVS at 0x52000). */
+#define OAD_APP_BASE        0x00004000u
+#define OAD_APP_MAX_LEN     0x0004E000u
+
+/* Golden / trial markers in ExtImageInfo_t.counter -- same values as BIM */
+#define SCK_GOLDEN_MAGIC        0x444C4F47u  /* "GOLD"                     */
+#define SCK_TRIAL_CONFIRM_MASK  0xFF000000u  /* app clears top byte = OK   */
+
+/* Unconfirmed new image resets itself after this long so the BIM can count
+ * the boot (3 boots without a confirm -> BIM reverts to golden).
+ * Override at build time for bench tests, e.g. -DSCK_TRIAL_TIMEOUT_S=60. */
+#ifndef SCK_TRIAL_TIMEOUT_S
+#define SCK_TRIAL_TIMEOUT_S     1800u        /* 30 minutes                 */
+#endif
+
+typedef enum {
+    OAD_TRIAL_NONE      = 0,  /* no candidate on record                    */
+    OAD_TRIAL_PENDING   = 1,  /* new image running, not yet confirmed      */
+    OAD_TRIAL_REJECTED  = 2,  /* candidate failed trial / copy CRC         */
+    OAD_TRIAL_CONFIRMED = 3,  /* candidate confirmed by a ground command   */
+} oad_trial_state_t;
+
+static volatile oad_trial_state_t sTrialState = OAD_TRIAL_NONE;
+static uint8_t       sTrialBootsUsed = 0;
+static bool          sGoldenPresent  = false;
+static Clock_Struct  sTrialClock;
 
 typedef struct {
     volatile bool active;     /* OAD session in progress — volatile so rfTask
@@ -119,11 +167,14 @@ static void handle_pico_cmd(uint16_t cmdSeq, uint8_t picoSub,
                             const uint8_t *args, uint8_t argsLen,
                             uint8_t ccsdsCmd, uint16_t respMax);
 static void handle_cmd_ack(uint16_t cmdSeq, uint8_t subOpcode);
-static void handle_oad_start(uint16_t cmdSeq, const uint8_t *data, uint16_t dataLen);
+/* noinline: keep each OAD handler's locals out of the dispatch frame (rfTask stack) */
+__attribute__((noinline)) static void handle_oad_start(uint16_t cmdSeq, const uint8_t *data, uint16_t dataLen);
 static void handle_oad_chunk(uint16_t cmdSeq, const uint8_t *data, uint16_t dataLen);
-static void handle_oad_end(uint16_t cmdSeq, const uint8_t *data, uint16_t dataLen);
+__attribute__((noinline)) static void handle_oad_end(uint16_t cmdSeq, const uint8_t *data, uint16_t dataLen);
 static void handle_oad_abort(uint16_t cmdSeq);
 static void handle_oad_status(uint16_t cmdSeq);
+__attribute__((noinline)) static void handle_oad_set_golden(uint16_t cmdSeq);
+__attribute__((noinline)) static void oad_trial_confirm(void);
 static bool uart_send_ccsds(uint16_t apid, bool isCmd,
                              uint16_t seqCount,
                              const uint8_t *data, uint16_t dataLen);
@@ -215,6 +266,36 @@ void uart_task(uintptr_t arg0, uintptr_t arg1)
  *
  * SCK-DEV: ADD_COMMAND -- Add new CMD_* sub-opcode cases here.
  * --------------------------------------------------------------------- */
+/* -----------------------------------------------------------------------
+ * handle_crypto_status()
+ * Reply with the crypto counters (crypto_get_stats). For 0x16 a status
+ * byte follows the sub-opcode; 0x17 omits it (pass status = 0xFF).
+ * --------------------------------------------------------------------- */
+static void put_be32_u(uint8_t *p, uint32_t v)
+{
+    p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16);
+    p[2] = (uint8_t)(v >>  8); p[3] = (uint8_t)(v);
+}
+
+static void handle_crypto_status(uint16_t cmdSeq, uint8_t subOpcode, uint8_t status)
+{
+    static uint8_t rsp[2 + 7 * 4];
+    crypto_stats_t st;
+    crypto_get_stats(&st);
+
+    uint16_t n = 0;
+    rsp[n++] = subOpcode;
+    if (status != 0xFF) rsp[n++] = status;
+    put_be32_u(&rsp[n], st.accepted);      n += 4;
+    put_be32_u(&rsp[n], st.rejMac);        n += 4;
+    put_be32_u(&rsp[n], st.rejReplay);     n += 4;
+    put_be32_u(&rsp[n], st.rejFormat);     n += 4;
+    put_be32_u(&rsp[n], st.replayClears);  n += 4;
+    put_be32_u(&rsp[n], st.silenceResets); n += 4;
+    put_be32_u(&rsp[n], st.bootCount);     n += 4;
+    uart_send_ccsds(CCSDS_APID_CMD_ACK, false, cmdSeq, rsp, n);
+}
+
 void uart_dispatch_ccsds_packet(const uint8_t *buf, uint16_t len, bool viaRf)
 {
     if (buf == NULL || len < sizeof(ccsds_primary_header_t))
@@ -253,9 +334,24 @@ void uart_dispatch_ccsds_packet(const uint8_t *buf, uint16_t len, bool viaRf)
 #if SCK_IS_GS_BOARD
         case SCK_APID_BOARD_REMOTE_1:
         case SCK_APID_BOARD_REMOTE_2:
-            /* GS board received a command addressed to a remote board.
-             * Forward over RF -- do not dispatch locally. */
-            rf_forward_enqueue(buf, len);
+            /* GS board received a plaintext command from C# over USB.
+             * Encrypt it here before forwarding over RF to the remote board.
+             * C# sends plaintext -- all encryption happens in firmware.
+             * rf_forward_enqueue() queues for rfTask which calls
+             * radio_transmit(). Encrypt first, then enqueue. */
+            {
+                static uint8_t sFwdEncBuf[sizeof(ccsds_primary_header_t)
+                                          + ESP_MAX_PAYLOAD
+                                          + SCK_CRYPTO_OVERHEAD];
+                uint16_t fwdEncLen = 0;
+                /* OAD chunks get no reply: forward without the GS
+                 * response window (rf_forward_enqueue_ex, main.c). */
+                bool expectReply = !(dataFieldLen >= 1 &&
+                                     dataField[0] == CMD_OAD_CHUNK);
+                if (crypto_encrypt(buf, len, sFwdEncBuf, &fwdEncLen))
+                    rf_forward_enqueue_ex(sFwdEncBuf, fwdEncLen, expectReply);
+                /* If encrypt fails, drop silently -- crypto not ready */
+            }
             return;
 #endif
 
@@ -274,6 +370,15 @@ void uart_dispatch_ccsds_packet(const uint8_t *buf, uint16_t len, bool viaRf)
             }
             if (dataFieldLen < 1) return;
             uint8_t subOpcode = dataField[0];
+
+            /* A valid, decrypted command addressed to this board proves the
+             * running image can hear the ground station: confirm a pending
+             * trial image. Remote boards count RF only; the GS board counts
+             * its UART link. No-op unless a trial is pending. */
+            if (viaRf || SCK_IS_GS_BOARD)
+            {
+                oad_trial_confirm();
+            }
 
             switch (subOpcode)
             {
@@ -299,72 +404,117 @@ void uart_dispatch_ccsds_packet(const uint8_t *buf, uint16_t len, bool viaRf)
                     handle_cmd_ack(seqCount, subOpcode);
                     break;
 
+                case CMD_CRYPTO_STATUS:
+                    handle_crypto_status(seqCount, CMD_CRYPTO_STATUS, 0xFF);
+                    break;
+
+                case CMD_CRYPTO_RESET_REPLAY:
+                    /* Local recovery only: a replay-table clear over RF would
+                     * let anyone who recorded traffic replay it. On the GS
+                     * board this arrives over USB; on a remote, over J4. */
+                    if (viaRf)
+                    {
+                        uint8_t nack[2] = { subOpcode, 0xE1 };
+                        uart_send_ccsds(CCSDS_APID_CMD_ACK, false, seqCount, nack, 2);
+                        break;
+                    }
+                    crypto_reset_replay_counter();
+                    handle_crypto_status(seqCount, CMD_CRYPTO_RESET_REPLAY, 0x00);
+                    break;
+
+                case CMD_CLEAR_SAFE_MODE:
+                    /* Clear safe mode and reset counter in NV flash.
+                     * Always allowed regardless of safe mode state --
+                     * this is the ground station recovery mechanism. */
+                    nv_storage_clear_safe_mode();
+                    gSafeMode = false;
+                    handle_cmd_ack(seqCount, subOpcode);
+                    break;
+
                 case CMD_PICO_PING:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x00, NULL, 0, CMD_PICO_PING, 64);
                     break;
 
                 case CMD_PICO_TEMP:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x01, NULL, 0, CMD_PICO_TEMP, 64);
                     break;
 
                 case CMD_PICO_SNAP:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x02, NULL, 0, CMD_PICO_SNAP, 64);
                     break;
 
                 case CMD_PICO_LIST:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x03, NULL, 0, CMD_PICO_LIST, 200);
                     break;
 
                 case CMD_PICO_INFO:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x04,
                                     dataField + 1, (uint8_t)(dataFieldLen - 1),
                                     CMD_PICO_INFO, 64);
                     break;
 
                 case CMD_PICO_CHUNK:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x05,
                                     dataField + 1, (uint8_t)(dataFieldLen - 1),
                                     CMD_PICO_CHUNK, 220);
                     break;
 
                 case CMD_PICO_DELETE:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x06,
                                     dataField + 1, (uint8_t)(dataFieldLen - 1),
                                     CMD_PICO_DELETE, 64);
                     break;
 
                 case CMD_GET_GPS:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x07, NULL, 0, CMD_GET_GPS, 128);
                     break;
 
                 case CMD_GET_BARO:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x08, NULL, 0, CMD_GET_BARO, 64);
                     break;
 
                 case CMD_PICO_BEACON:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_pico_cmd(seqCount, 0x09,
                                     dataField + 1, (uint8_t)(dataFieldLen - 1),
                                     CMD_PICO_BEACON, 32);
                     break;
 
                 case CMD_OAD_START:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
                     handle_oad_start(seqCount, dataField + 1, dataFieldLen - 1);
                     break;
 
                 case CMD_OAD_CHUNK:
+                    if (gSafeMode) break;  /* silently drop chunks in safe mode */
                     handle_oad_chunk(seqCount, dataField + 1, dataFieldLen - 1);
                     break;
 
                 case CMD_OAD_END:
+                    if (gSafeMode) break;
                     handle_oad_end(seqCount, dataField + 1, dataFieldLen - 1);
                     break;
 
                 case CMD_OAD_ABORT:
-                    handle_oad_abort(seqCount);
+                    handle_oad_abort(seqCount);  /* always allow abort */
                     break;
 
                 case CMD_OAD_STATUS:
-                    handle_oad_status(seqCount);
+                    handle_oad_status(seqCount);  /* always allow status query */
+                    break;
+
+                case CMD_OAD_SET_GOLDEN:
+                    if (gSafeMode) { uint8_t nack[2]={subOpcode,0xE0}; uart_send_ccsds(CCSDS_APID_CMD_ACK,false,seqCount,nack,2); break; }
+                    handle_oad_set_golden(seqCount);
                     break;
 
                 default:
@@ -413,18 +563,59 @@ bool uart_forward_rf_packet(const uint8_t *buf, uint16_t len)
     {
         return false;
     }
-    return uart_send(buf, len);
+
+    /* Decrypt RF response from remote board before forwarding to C# GS app.
+     * Remote board encrypts all RF responses with Key 0.
+     * Try all 3 keys -- accept first valid MAC (Option A 3-key fallback). */
+    static uint8_t sDecBuf[sizeof(ccsds_primary_header_t) + ESP_MAX_PAYLOAD];
+    uint16_t decLen   = 0;
+    uint8_t  keyIndex = 0;
+
+    if (!crypto_decrypt(buf, len, sDecBuf, &decLen, &keyIndex))
+        return false;  /* MAC failed -- drop, never forward unauthenticated data */
+
+    return uart_send(sDecBuf, decLen);
 }
 
 /* -----------------------------------------------------------------------
  * uart_send_rf()
  * Send a CCSDS packet back over RF.
  * Used by remote board to respond to commands received via RF.
+ *
+ * Remote board: queues packet via rf_tx_enqueue() for rfTask to transmit.
+ *   radio_transmit() uses sRfHandle which is owned by rfTask. Calling it
+ *   from uart_task context (where this runs post-decrypt) causes silent
+ *   failures -- the TI RF driver is not thread-safe across tasks.
+ *   rf_tx_enqueue() hands off to rfTask which calls radio_transmit() safely.
+ *
+ * GS board: this path is only reached from uart_forward_rf_packet() which
+ *   is called from rfTask, so radio_transmit() is safe to call directly.
+ *
+ * Encryption: currently bypassed for diagnostic. Normal path (commented
+ *   below) encrypts with crypto_encrypt() before transmitting.
+ *   Re-enable after TI AESCCM keystream mismatch is resolved.
  * --------------------------------------------------------------------- */
 bool uart_send_rf(const uint8_t *buf, uint16_t len)
 {
     if (buf == NULL || len == 0) return false;
-    return radio_transmit(buf, len);
+
+#if !SCK_IS_GS_BOARD
+    /* Remote board: encrypt and transmit directly via radio_transmit().
+     * This is called from rfTask context (decrypt+dispatch happens in rfTask
+     * with software AES -- no TI hardware dependency, no task restriction).
+     * radio_transmit() is safe here since rfTask owns sRfHandle. */
+    static uint8_t sEncBuf[sizeof(ccsds_primary_header_t)
+                           + ESP_MAX_PAYLOAD
+                           + SCK_CRYPTO_OVERHEAD];
+    uint16_t encLen = 0;
+    if (!crypto_encrypt(buf, len, sEncBuf, &encLen))
+        return false;
+    return radio_transmit(sEncBuf, encLen);
+#else
+    /* GS board: not used for outgoing RF -- handled by rf_forward_enqueue(). */
+    (void)buf; (void)len;
+    return false;
+#endif
 }
 
 /* -----------------------------------------------------------------------
@@ -485,10 +676,11 @@ static bool uart_send_ccsds(uint16_t apid, bool isCmd,
     }
 
     /* Route response via RF (remote board responding to RF command)
-     * or via UART (GS board responding to UART command). */
+     * or via UART (GS board responding to UART command).
+     * uart_send_rf() encrypts before radio_transmit(). */
     if (sResponseViaRf)
     {
-        return radio_transmit(pktBuf, pktLen);
+        return uart_send_rf(pktBuf, pktLen);
     }
     return uart_send(pktBuf, pktLen);
 }
@@ -639,7 +831,7 @@ static uint16_t pico_send_recv(uint8_t subOpcode,
     {
         bytesRead = 0;
         UART2_read(sPayloadUartHandle, &b, 1, &bytesRead);
-        if (bytesRead == 0) { usleep(1000); elapsed++; continue; }
+        if (bytesRead == 0) { Task_sleep(1); elapsed++; continue; }  /* Task_sleep yields to RTOS scheduler -- usleep() busy-spins on CC1352P with TI-RTOS7, starving rfTask and preventing sRxDecryptPending from being set */
 
         switch (state)
         {
@@ -757,14 +949,37 @@ static void handle_oad_start(uint16_t cmdSeq,
                        ((uint32_t)data[2] <<  8) | (uint32_t)data[3];
     uint16_t crc16   = ((uint16_t)data[4] << 8) | data[5];
 
-    if (imgSize == 0 || imgSize > 0xC0000) goto done; /* max 768KB -- MX25R8035F is 1MB */
+    if (imgSize == 0 || imgSize > OAD_APP_MAX_LEN) goto done; /* must fit 0x4000..0x52000 */
 
     /* Open ext flash */
     if (!extFlashOpen()) goto done;
 
-    /* Erase OAD slot -- covers metadata page (4KB) + all image data pages.
-     * Start at OAD_SLOT_OFFSET (0x000000), length = imgSize + one extra
-     * 4KB sector for the metadata page, rounded up to sector boundary. */
+    /* Legacy cleanup: firmware before 11/09/26 wrote OAD metadata to page 0.
+     * Anything on page 0 that is not a golden record is erased so the BIM
+     * never treats it as the golden image. */
+    {
+        static ExtImageInfo_t g;     /* static: off the rfTask stack */
+        if (!extFlashRead(OAD_GOLD_META, sizeof(g), (uint8_t *)&g))
+        {
+            extFlashClose();
+            goto done;
+        }
+        const uint8_t eflMagic[OAD_EFL_MAGIC_SZ] = OAD_EFL_MAGIC;
+        if (memcmp(g.fixedHdr.imgID, eflMagic, OAD_EFL_MAGIC_SZ) == 0 &&
+            g.counter != SCK_GOLDEN_MAGIC)
+        {
+            if (!extFlashErase(OAD_GOLD_META, OAD_EFL_SECTOR))
+            {
+                extFlashClose();
+                goto done;
+            }
+        }
+    }
+
+    /* Erase OAD slot -- covers candidate metadata page (4KB) + all image
+     * data pages. Start at OAD_SLOT_OFFSET (0x001000), length = imgSize +
+     * one extra 4KB sector for the metadata page, rounded up. Page 0
+     * (golden metadata) and the golden image at 0x80000 are not touched. */
     uint32_t eraseLen = (((imgSize + 0x1000) + 0xFFF) / 0x1000) * 0x1000;
     if (!extFlashErase(OAD_SLOT_OFFSET, eraseLen))
     {
@@ -891,6 +1106,7 @@ static void handle_oad_end(uint16_t cmdSeq,
 {
     uint8_t status = 0x01;
 
+
     if (!sOad.active) goto done;
     if (dataLen < 4)  goto done;
 
@@ -901,7 +1117,7 @@ static void handle_oad_end(uint16_t cmdSeq,
      * Flash is still open from handle_oad_start. */
 
     uint16_t crc = 0xFFFF;
-    uint8_t  readBuf[64];
+    static uint8_t readBuf[64];      /* static: off the rfTask stack */
     uint32_t remaining = sOad.imgSize;
     uint32_t offset    = OAD_IMG_OFFSET;    /* image data starts past metadata page */
 
@@ -946,7 +1162,7 @@ static void handle_oad_end(uint16_t cmdSeq,
     {
         /* Build ExtImageInfo_t metadata struct on stack.
          * Zero-initialise first so reserved/unused fields are 0xFF-safe. */
-        ExtImageInfo_t meta;
+        static ExtImageInfo_t meta;  /* static: off the rfTask stack */
         memset(&meta, 0xFF, sizeof(meta)); /* 0xFF = erased flash default */
 
         /* imgID: OAD_EFL_MAGIC identifies this as an ext flash metadata entry.
@@ -968,15 +1184,16 @@ static void handle_oad_end(uint16_t cmdSeq,
         meta.fixedHdr.imgEndAddr = 0x00004000 + sOad.imgSize - 1;
 
         /* extFlAddr: where image data lives in ext flash.
-         * Image data starts at page 1 (0x001000), right after metadata page. */
+         * Candidate image starts at 0x002000, right after its metadata page. */
         meta.extFlAddr = OAD_IMG_OFFSET;
 
-        /* counter: unused, leave as 0xFFFFFFFF */
+        /* counter: trial-boot record, starts all ones.
+         * BIM clears low-byte bits per boot; app clears the top byte when a
+         * ground command confirms the image (oad_trial_confirm). */
         meta.counter = 0xFFFFFFFF;
 
-        /* Write metadata to page 0 (sector must already be erased from
-         * handle_oad_start -- we erased from offset 0 covering page 0). */
-        bool metaOk = extFlashWrite(EFL_ADDR_META, sizeof(ExtImageInfo_t),
+        /* Write metadata to page 1 (erased in handle_oad_start). */
+        bool metaOk = extFlashWrite(OAD_SLOT_OFFSET, sizeof(ExtImageInfo_t),
                                     (const uint8_t *)&meta);
         if (!metaOk)
         {
@@ -1028,11 +1245,15 @@ static void handle_oad_abort(uint16_t cmdSeq)
 /* -----------------------------------------------------------------------
  * handle_oad_status()
  * CMD_OAD_STATUS -- returns current OAD session progress.
- * Response: [1B active][4B bytesReceived][4B imgSize]
+ * Response: [0x14][1B active][4B bytesReceived][4B imgSize]
+ *           [1B trialState][1B trialBootsUsed][1B goldenPresent]
+ * trialState: 0 none, 1 pending, 2 rejected, 3 confirmed (oad_trial_state_t).
+ * (Before 11/09 the response was 9 bytes and dropped imgSize's low byte;
+ * the first 6 bytes are unchanged so older GS builds still parse it.)
  * --------------------------------------------------------------------- */
 static void handle_oad_status(uint16_t cmdSeq)
 {
-    uint8_t resp[9] = {
+    uint8_t resp[13] = {
         CMD_OAD_STATUS,
         sOad.active ? 0x01 : 0x00,
         (uint8_t)(sOad.bytesReceived >> 24),
@@ -1042,6 +1263,218 @@ static void handle_oad_status(uint16_t cmdSeq)
         (uint8_t)(sOad.imgSize >> 24),
         (uint8_t)(sOad.imgSize >> 16),
         (uint8_t)(sOad.imgSize >>  8),
+        (uint8_t)(sOad.imgSize      ),
+        (uint8_t)sTrialState,
+        sTrialBootsUsed,
+        sGoldenPresent ? 0x01 : 0x00,
     };
     uart_send_ccsds(CCSDS_APID_CMD_ACK, false, cmdSeq, resp, sizeof(resp));
+}
+
+/* -----------------------------------------------------------------------
+ * OAD trial boot + golden image (11/09/26)
+ *
+ * Protects a board in flight from a new image that boots but cannot talk
+ * to the ground:
+ *   - BIM counts boots of an unconfirmed candidate (ext flash page 1,
+ *     metadata.counter low byte).
+ *   - The app confirms the candidate (clears the counter's top byte) on the
+ *     first valid command addressed to this board (oad_trial_confirm).
+ *   - If no command arrives within SCK_TRIAL_TIMEOUT_S the app resets, so
+ *     the BIM can count another boot. After 3 boots the BIM marks the
+ *     candidate CRC_INVALID and copies the golden image back.
+ *   - CMD_OAD_SET_GOLDEN copies the running (confirmed) app to the golden
+ *     slot. Done once at production and after any update you want as the
+ *     new fallback.
+ * --------------------------------------------------------------------- */
+
+static void oad_trial_timeout(uintptr_t arg)
+{
+    (void)arg;
+    /* Not confirmed in time: reset so the BIM counts this boot. */
+    SysCtrlSystemReset();
+}
+
+/* Called once from rfTask at boot (main.c), after radio/crypto init.
+ * rfTask's stack (1024 B) handles extFlashRead()'s 520-byte buffers; the
+ * uart_task stack is too small for it. */
+void oad_trial_init(void)
+{
+    static ExtImageInfo_t m;         /* static: off the rfTask stack */
+    const uint8_t  eflMagic[OAD_EFL_MAGIC_SZ] = OAD_EFL_MAGIC;
+
+    sTrialState     = OAD_TRIAL_NONE;
+    sTrialBootsUsed = 0;
+    sGoldenPresent  = false;
+
+    if (!extFlashOpen())
+    {
+        return;     /* ext flash unavailable: no trial handling this boot */
+    }
+
+    /* Golden record present? */
+    if (extFlashRead(OAD_GOLD_META, sizeof(m), (uint8_t *)&m) &&
+        memcmp(m.fixedHdr.imgID, eflMagic, OAD_EFL_MAGIC_SZ) == 0 &&
+        m.counter == SCK_GOLDEN_MAGIC &&
+        m.fixedHdr.crcStat == CRC_VALID)
+    {
+        sGoldenPresent = true;
+    }
+
+    /* Candidate state */
+    if (extFlashRead(OAD_SLOT_OFFSET, sizeof(m), (uint8_t *)&m) &&
+        memcmp(m.fixedHdr.imgID, eflMagic, OAD_EFL_MAGIC_SZ) == 0)
+    {
+        uint8_t low = (uint8_t)(m.counter & 0xFFu);
+        for (uint8_t b = 0; b < 8u; b++)
+        {
+            if ((low & (1u << b)) == 0u) { sTrialBootsUsed++; }
+        }
+
+        if (m.fixedHdr.crcStat == CRC_INVALID)
+        {
+            sTrialState = OAD_TRIAL_REJECTED;
+        }
+        else if ((m.counter & SCK_TRIAL_CONFIRM_MASK) == 0u)
+        {
+            sTrialState = OAD_TRIAL_CONFIRMED;
+        }
+        else if (m.fixedHdr.imgCpStat == COPY_DONE)
+        {
+            sTrialState = OAD_TRIAL_PENDING;
+        }
+        /* else NEED_COPY: BIM has not installed it yet -- not running */
+    }
+    extFlashClose();
+
+    if (sTrialState == OAD_TRIAL_PENDING)
+    {
+        Clock_Params cp;
+        Clock_Params_init(&cp);
+        cp.period    = 0;           /* one-shot */
+        cp.startFlag = true;
+        Clock_construct(&sTrialClock, oad_trial_timeout,
+                        (uint32_t)((uint64_t)SCK_TRIAL_TIMEOUT_S * 1000000u
+                                   / Clock_tickPeriod),
+                        &cp);
+    }
+}
+
+static void oad_trial_confirm(void)
+{
+    if (sTrialState != OAD_TRIAL_PENDING)
+    {
+        return;
+    }
+
+    bool keepOpen = sOad.active;    /* never close a flash held by OAD */
+    if (!extFlashOpen())
+    {
+        return;                     /* try again on the next command */
+    }
+
+    /* Clear the counter's top byte (only clears bits: no erase needed). */
+    uint8_t zero = 0x00;
+    bool ok = extFlashWrite(OAD_SLOT_OFFSET + offsetof(ExtImageInfo_t, counter) + 3u,
+                            1, &zero);
+    if (!keepOpen)
+    {
+        extFlashClose();
+    }
+
+    if (ok)
+    {
+        sTrialState = OAD_TRIAL_CONFIRMED;
+        Clock_stop(Clock_handle(&sTrialClock));
+    }
+}
+
+/* -----------------------------------------------------------------------
+ * handle_oad_set_golden()
+ * CMD_OAD_SET_GOLDEN (no args) -- copy the running app (internal flash
+ * 0x4000, length from its OAD header) to the golden slot at ext 0x80000
+ * and write the golden record on page 0.
+ *
+ * Refused while an OAD session is active or the running image is still on
+ * trial (confirm it first by sending any command).
+ *
+ * Takes several seconds (78 sector erases + writes + verify); yields
+ * between sectors so the watchdog task keeps running.
+ *
+ * ACK: [0x15][status][err][len3][len2][len1][len0]
+ *   status 0x00 ok, 0x01 fail. err: 0x01 OAD active, 0x02 trial pending,
+ *   0x03 bad header length, 0x04 flash open, 0x05 erase, 0x06 write,
+ *   0x07 verify mismatch, 0x08 metadata write.
+ * --------------------------------------------------------------------- */
+static void handle_oad_set_golden(uint16_t cmdSeq)
+{
+    uint8_t  status = 0x01, err = 0x00;
+    const imgFixedHdr_t *hdr = (const imgFixedHdr_t *)(uintptr_t)OAD_APP_BASE;
+    uint32_t len = hdr->len;
+    static uint8_t buf[256];
+    static uint8_t rbk[256];
+
+    if (sOad.active)                         { err = 0x01; goto done; }
+    if (sTrialState == OAD_TRIAL_PENDING)    { err = 0x02; goto done; }
+    if (len == 0u || len > OAD_APP_MAX_LEN)  { err = 0x03; goto done; }
+    if (!extFlashOpen())                     { err = 0x04; goto done; }
+
+    /* 1. Invalidate the old golden record first, so a reset mid-copy never
+     *    leaves a record pointing at a half-written image. */
+    sGoldenPresent = false;
+    if (!extFlashErase(OAD_GOLD_META, OAD_EFL_SECTOR)) { err = 0x05; goto close; }
+
+    /* 2. Erase the golden image area sector by sector (yield between). */
+    for (uint32_t a = 0; a < len; a += OAD_EFL_SECTOR)
+    {
+        if (!extFlashErase(OAD_GOLD_IMG + a, OAD_EFL_SECTOR)) { err = 0x05; goto close; }
+        Task_sleep(1);
+    }
+
+    /* 3. Copy + verify. Exact copy: the built header already carries
+     *    crcStat = CRC_VALID and the BIM only ever rewrites it to the same
+     *    value, so the golden bytes equal the built image and its crc32
+     *    (written into the header by the GS after each build). */
+    for (uint32_t off = 0; off < len; off += sizeof(buf))
+    {
+        uint32_t n = (len - off < sizeof(buf)) ? (len - off) : sizeof(buf);
+        memcpy(buf, (const uint8_t *)(uintptr_t)(OAD_APP_BASE + off), n);
+        if (!extFlashWrite(OAD_GOLD_IMG + off, n, buf))   { err = 0x06; goto close; }
+        if (!extFlashRead(OAD_GOLD_IMG + off, n, rbk) ||
+            memcmp(buf, rbk, n) != 0)                     { err = 0x07; goto close; }
+        if ((off & (OAD_EFL_SECTOR - 1u)) == 0u)
+        {
+            Task_sleep(1);
+        }
+    }
+
+    /* 4. Golden record on page 0 -- written last. */
+    {
+        static ExtImageInfo_t meta;  /* static: off the rfTask stack */
+        const uint8_t eflMagic[OAD_EFL_MAGIC_SZ] = OAD_EFL_MAGIC;
+        memset(&meta, 0xFF, sizeof(meta));
+        memcpy(&meta.fixedHdr, hdr, sizeof(imgFixedHdr_t));   /* real crc32, len, prgEntry */
+        memcpy(meta.fixedHdr.imgID, eflMagic, OAD_EFL_MAGIC_SZ);
+        meta.fixedHdr.imgCpStat = COPY_DONE;   /* BIM scan must not copy it   */
+        meta.fixedHdr.crcStat   = CRC_VALID;   /* Bim_revertFactoryImage needs */
+        meta.extFlAddr          = OAD_GOLD_IMG;
+        meta.counter            = SCK_GOLDEN_MAGIC;
+        if (!extFlashWrite(OAD_GOLD_META, sizeof(meta), (const uint8_t *)&meta))
+        {
+            err = 0x08; goto close;
+        }
+    }
+
+    sGoldenPresent = true;
+    status = 0x00;
+
+close:
+    extFlashClose();
+done:
+    {
+        uint8_t ack[7] = { CMD_OAD_SET_GOLDEN, status, err,
+                           (uint8_t)(len >> 24), (uint8_t)(len >> 16),
+                           (uint8_t)(len >>  8), (uint8_t)(len) };
+        uart_send_ccsds(CCSDS_APID_CMD_ACK, false, cmdSeq, ack, sizeof(ack));
+    }
 }

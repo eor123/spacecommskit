@@ -145,4 +145,14 @@ bool uart_send_rf(const uint8_t *buf, uint16_t len);
  */
 bool uart_forward_rf_packet(const uint8_t *buf, uint16_t len);
 
+/*
+ * oad_trial_init()
+ * Read the OAD trial-boot / golden-image state from ext flash and, if a
+ * newly installed image is still unconfirmed, arm the trial timeout
+ * (SCK_TRIAL_TIMEOUT_S, then reset so the BIM counts the boot).
+ * Call once from rfTask after radio_init()/crypto_init() -- needs the SPI
+ * driver, task context and rfTask's larger stack.
+ */
+void oad_trial_init(void);
+
 #endif /* UART_H */

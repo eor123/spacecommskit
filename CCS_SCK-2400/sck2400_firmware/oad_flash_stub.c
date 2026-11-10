@@ -430,8 +430,10 @@ bool extFlashRead(size_t offset, size_t length, uint8_t *buf)
         size_t chunk = remaining < READ_CHUNK ? remaining : READ_CHUNK;
 
         /* Combined tx: [CMD, A2, A1, A0, 0xFF×chunk] */
-        uint8_t txBuf[4 + READ_CHUNK];
-        uint8_t rxBuf[4 + READ_CHUNK];
+        /* static (11/09/26): 520 bytes off the caller's task stack. Flash
+         * access is single-threaded (rfTask on the remote board). */
+        static uint8_t txBuf[4 + READ_CHUNK];
+        static uint8_t rxBuf[4 + READ_CHUNK];
 
         uint32_t addr = (uint32_t)(offset + pos);
         txBuf[0] = MX25_CMD_READ;
@@ -492,7 +494,7 @@ bool extFlashWrite(size_t offset, size_t length, const uint8_t *buf)
         }
 
         /* Build PP transaction: [02h][A2][A1][A0][data×chunk] */
-        uint8_t txBuf[4 + MX25_PAGE_SIZE];
+        static uint8_t txBuf[4 + MX25_PAGE_SIZE];   /* static: off the task stack */
         txBuf[0] = MX25_CMD_PP;
         txBuf[1] = (uint8_t)(addr >> 16);
         txBuf[2] = (uint8_t)(addr >>  8);

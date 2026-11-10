@@ -16,6 +16,8 @@ const GPIO        = scripting.addModule("/ti/drivers/GPIO");
 const GPIO1       = GPIO.addInstance();
 const GPIO2       = GPIO.addInstance();
 const GPIO3       = GPIO.addInstance();
+const NVS         = scripting.addModule("/ti/drivers/NVS", {}, false);
+const NVS1        = NVS.addInstance();
 const Power       = scripting.addModule("/ti/drivers/Power");
 const SPI         = scripting.addModule("/ti/drivers/SPI", {}, false);
 const SPI1        = SPI.addInstance();
@@ -39,10 +41,11 @@ const Timestamp   = scripting.addModule("/ti/sysbios/runtime/Timestamp");
 /**
  * Write custom configuration values to the imported modules.
  */
-CCFG.enableBootloader        = true;
-CCFG.levelBootloaderBackdoor = "Active low";
-CCFG.dioBootloaderBackdoor   = 16;
-CCFG.ccfgTemplate.$name      = "ti_devices_CCFG_CCFGCC26XXTemplate0";
+CCFG.enableBootloader         = true;
+CCFG.levelBootloaderBackdoor  = "Active low";
+CCFG.enableBootloaderBackdoor = true;
+CCFG.dioBootloaderBackdoor    = 6;
+CCFG.ccfgTemplate.$name       = "ti_devices_CCFG_CCFGCC26XXTemplate0";
 
 custom.prop2                                             = ["2gfsk250kbps"];
 custom.radioConfig2gfsk250kbps.$name                     = "ti_devices_radioconfig_settings_prop0";
@@ -64,6 +67,10 @@ scripting.suppress("Connected to hardware,@@@.+?@@@ is connected to SKY13317-373
 GPIO3.$name     = "CONFIG_GPIO_GLED";
 GPIO3.mode      = "Output";
 GPIO3.$hardware = system.deviceData.board.components.LED_GREEN;
+
+NVS1.$name                    = "CONFIG_NVSINTERNAL";
+NVS1.internalFlash.$name      = "ti_drivers_nvs_NVSCC26XX0";
+NVS1.internalFlash.regionBase = 0x52000;
 
 const RF = scripting.addModule("/ti/drivers/RF", {}, false);
 scripting.suppress("The board \'CC1352P-2 LaunchPad\' requires the \'RF Antenna Switch\' to be selected\\.", RF, "$hardware");

@@ -19,7 +19,7 @@
  *       It must NOT use TI-RTOS or any RTOS-dependent drivers.
  */
 --retain "*(.resetVecs)"
---stack_size=256
+--stack_size=1024   /* 11/09/26: was 256; golden/trial code adds ExtImageInfo_t frames + ext-flash CRC */
 --heap_size=0
 
 /* Suppress warnings about unused sections */

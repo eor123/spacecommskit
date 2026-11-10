@@ -272,6 +272,9 @@ namespace OpenLstGroundStation
         // RF Power Mode — 0 = bench (0dBm), 1 = field (max)
         private RadioButton rbPowerBench    = null!;
         private RadioButton rbPowerField    = null!;
+        private CheckBox    chkCwTest       = null!;   // SCK-2400 CW carrier test (11/02/26)
+        private bool        _lastBuildWasCwTest;        // what the last SCK-2400 build actually baked in
+        private ComboBox    cmbPaTableOverride = null!;
         // SCK-2400 board role selector — GS or Remote, sets SCK_APID_THIS_BOARD at build time
         private ComboBox    cmbBoardRole    = null!;
         private Panel       _provInstrPanel  = null!;
@@ -317,6 +320,124 @@ namespace OpenLstGroundStation
         };
         private static readonly string RTL_POWER_CONFIG_KEY = "RtlPowerPath";
         private string _rtlPowerPath = string.Empty;
+
+        // ── tinySA QA integration ──────────────────────────────────────
+        // Python + pyserial availability, checked once at startup.
+        // Ships as Content (Copy to Output Directory) alongside the app --
+        // same mechanism already used for openlst_437_bootloader.hex --
+        // so it's already present in the publish/install output folder,
+        // no embedded-resource extraction needed.
+        private bool         _pythonAvailable  = false;
+        private string       _pythonExe        = "py";
+        private static string TinySaScriptPath =>
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tinysa_qa_scan.py");
+        private ComboBox     cmbQaInstrument   = null!;  // "RTL-SDR" or "tinySA"
+        private ComboBox     cmbTinySaPort     = null!;
+        private CheckBox     chkAttenuatorConfirmed = null!;
+
+        // ── Board QA Wizard ──────────────────────────────────────────────
+        private Button                    btnStartWizard  = null!;
+        private Button                    btnCancelWizard = null!;
+        private CancellationTokenSource?  _wizardCts;
+        // Set whenever an unsolicited "ascii" broadcast (OpenLST boot/
+        // bootloader identification string) arrives on the SCK-915 path --
+        // these only fire right after a reset, so seeing one during an
+        // active wizard scan means the board rebooted mid-test (e.g. the
+        // firmware's AUTO_REBOOT_SECONDS dead-man's-switch), not that the
+        // board is actually broken. Cleared and checked by
+        // RunWizardTinySaScan around each scan attempt. Volatile: written
+        // from the SerialPort.DataReceived background thread, read from
+        // the wizard's async flow.
+        private volatile bool _wizardBootloaderSeen = false;
+        // Set by SendGetTelemAsync (SCK-915 path) whenever a telem reply
+        // is successfully parsed -- lets the QA Wizard's Step 1 read
+        // Custom0 (power mode, 0=Bench/1=Field) directly from the board's
+        // own telemetry instead of only trusting the Firmware tab's UI
+        // selection. Null until the first successful get_telem this
+        // session.
+        private TelemData? _lastOpenLstTelem;
+        private Panel        pnlPythonWarning  = null!;
+
+        // ── Direct-connect power calibration ────────────────────────────
+        // ============================================================
+        // OPEN SOURCE NOTE: this assumes a fixed 30dB attenuator between
+        // the board's RF output and the tinySA input for EVERY QA scan
+        // (direct SMA/coax connection, no antenna). If your bench setup
+        // uses a different attenuator value, change this constant --
+        // it is the ONLY place the value is defined. True output power
+        // is calculated as: measured_dBm + ATTENUATOR_DB.
+        // ============================================================
+        private const int ATTENUATOR_DB = 30;
+
+        // ── QA trigger addressing ────────────────────────────────────────
+        // ============================================================
+        // OPEN SOURCE NOTE: this HWID is used to force the connected
+        // board to relay a get_telem command out over RF during QA scans
+        // (any HWID the connected board doesn't recognize as its own
+        // triggers a relay). Deliberately set to a real, valid remote-
+        // board address (0004) rather than an obviously-invalid sentinel
+        // like 0xFFFF -- this proves the relay behavior being tested is
+        // genuine, ordinary firmware routing to a real address, not
+        // something specific to an out-of-range magic value. Change this
+        // if your test bench's remote board uses a different HWID.
+        // ============================================================
+        private const ushort QA_TRIGGER_HWID = 0x0004;
+
+        // ── QA signal-detection tuning ───────────────────────────────────
+        // A single scan often misses the board's brief TX burst -- the
+        // sweep has to be dwelling on the right frequency at the exact
+        // moment the burst is on the air, which is a matter of enough
+        // tries and enough time, not a pass/fail signal on its own. This
+        // retries with Max Hold accumulated across attempts (same
+        // principle as the TinySA-App GUI's own Max Hold + continuous
+        // scan, which is what a manual bench test actually uses).
+        //   QA_MAX_TX_ATTEMPTS    -- give up after this many scan attempts
+        //                            if no signal is ever confirmed.
+        //   QA_PROMINENCE_DB      -- how far above the noise floor (dB) a
+        //                            peak must stand before it's trusted
+        //                            as a real signal, not noise. 15dB
+        //                            chosen after finding this exact
+        //                            tinySA unit has an internal ~10dB
+        //                            noise artifact around 920MHz -- keep
+        //                            this comfortably above whatever your
+        //                            own unit's noise floor looks like.
+        private const int    QA_MAX_TX_ATTEMPTS = 20;
+        private const double QA_PROMINENCE_DB   = 15.0;
+
+        // ── QA Wizard power floor (PROVISIONAL) ─────────────────────────
+        // ============================================================
+        // TWO SETS -- one per RF Power Mode (Firmware tab radio buttons,
+        // rbPowerField). Grading a board against the wrong mode's target
+        // produced a false FAIL earlier this session (a Bench-mode board
+        // reading ~4-5dB over its own ~18dBm target was misjudged against
+        // the ~28dBm Field target instead) -- the wizard now reads
+        // rbPowerField.Checked and picks the matching pair.
+        //
+        // FIELD/MAX (~28dBm target, board.h HGM HIGH): set from a link
+        // budget worked out August 2026 -- TX +28dBm, 200km LEO worst
+        // case at 10° elevation, 11dBi ground Yagi (placeholder, not a
+        // confirmed real antenna), RX sensitivity ~-110dBm (ESTIMATED via
+        // datasheet interpolation, not yet PER-tested). Margin came out
+        // to roughly -1.2dB at the target itself, i.e. razor thin -- so
+        // this floor sits close to target rather than relaxed for hand-
+        // build drift, on purpose.
+        //
+        // BENCH/0dBm (~18dBm target, board.h HGM LOW): this mode isn't
+        // mission-critical (indoor/bench safety, not LEO/HAB link
+        // budget), so the ±4dB band here is just reasonable hand-build
+        // tolerance, not a derived margin calculation.
+        //
+        // REFINE THESE ONCE REAL DATA EXISTS: once a handful of new-
+        // revision boards are built and bench-characterized (real
+        // PER-tested sensitivity, real ground antenna gain), rerun the
+        // link budget and adjust to match. Do not treat these as final.
+        // ============================================================
+        private const double QA_MIN_POWER_DBM_FIELD = 24.0;  // ~28dBm target
+        private const double QA_MAX_POWER_DBM_FIELD = 32.0;
+        private const double QA_MIN_POWER_DBM_BENCH = 14.0;  // ~18dBm target
+        private const double QA_MAX_POWER_DBM_BENCH = 22.0;
+
+
         // Folders — created automatically at startup
         private static string QaSnapshotFolder =>
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "QA_Snapshots");
@@ -491,7 +612,9 @@ namespace OpenLstGroundStation
                     ["SmartRFPath"]      = _smartRfPath,
                     ["RtlPowerPath"]     = _rtlPowerPath,
                     ["QaPpm"]            = _qaPpm.ToString(),
+                    ["BoardType"]        = (cmbBoardType?.SelectedIndex ?? 0).ToString(),
                     ["BoardRole"]        = (cmbBoardRole?.SelectedIndex ?? 0).ToString(),
+                    ["Sck2400Hardware"]  = (cmbHardware?.SelectedIndex ?? 0).ToString(),
                     ["Sck2400CcsServer"] = _sck2400CcsServer,
                     ["Sck2400SrfProg"]   = _sck2400SrfProg,
                     ["Sck2400Workspace"] = _sck2400Workspace,
@@ -536,9 +659,20 @@ namespace OpenLstGroundStation
             BuildFilesTab();
             BuildGpsTab();
             BuildProvisionTab();
+            CheckPythonAvailable();  // must run before BuildRfQaTab() needs the result
             BuildRfQaTab();
             BuildLogPanel();
             WireTimers();
+
+            // Now safe to log -- rtbLog exists as of the line above.
+            // (CheckPythonAvailable() itself must stay silent -- see its
+            // own comment for why.)
+            if (_pythonAvailable)
+                Log($"tinySA QA: Python found ({_pythonExe}), pyserial OK.", Theme.Gray);
+            else
+                Log("tinySA QA: Python and/or pyserial not found -- tinySA scanning " +
+                    "will be unavailable until installed. RTL-SDR QA is unaffected.",
+                    Theme.Yellow);
 
             ApplyBoardUi();  // apply initial board-specific UI state
 
@@ -567,6 +701,9 @@ namespace OpenLstGroundStation
                 _rtlPowerPath = rtp;
             if (s.TryGetValue("QaPpm",            out string? ppmStr) && int.TryParse(ppmStr, out int ppm))
                 _qaPpm = ppm;
+            if (s.TryGetValue("BoardType",        out string? bt) && int.TryParse(bt, out int btIdx)
+                && cmbBoardType != null && btIdx >= 0 && btIdx < cmbBoardType.Items.Count)
+                cmbBoardType.SelectedIndex = btIdx;
             if (s.TryGetValue("BoardRole",        out string? br) && int.TryParse(br, out int brIdx)
                 && brIdx >= 0 && brIdx < cmbBoardRole.Items.Count)
                 cmbBoardRole.SelectedIndex = brIdx;
@@ -578,6 +715,11 @@ namespace OpenLstGroundStation
                 _sck2400Workspace = ws;
             if (s.TryGetValue("Sck2400XdsDfu",    out string? xds) && !string.IsNullOrWhiteSpace(xds))
                 _sck2400XdsDfu = xds;
+            // Hardware last: its change handler rebuilds hex paths from the
+            // workspace path loaded just above.
+            if (s.TryGetValue("Sck2400Hardware",  out string? hw) && int.TryParse(hw, out int hwIdx)
+                && hwIdx >= 0 && hwIdx < cmbHardware.Items.Count)
+                cmbHardware.SelectedIndex = hwIdx;
 
             SetStatus("Disconnected", Theme.Red);
             Log("SCK Ground Station ready.", Theme.Cyan);
@@ -665,6 +807,7 @@ namespace OpenLstGroundStation
                 Text        = "0001",
                 MaxLength   = 4,
             };
+            txtHwid.TextChanged += (s, e) => UpdateRfStatusLabel();   // label follows the destination
 
             var btnRefreshPorts = MkButton("↺", 714, 12, 30, Theme.Gray, Theme.PanelBack);
             btnRefreshPorts.Font = new Font("Consolas", 12f, FontStyle.Bold);
@@ -711,6 +854,7 @@ namespace OpenLstGroundStation
             };
             cmbBoard.Items.AddRange(new object[] { "SCK-915", "SCK-2400" });
             cmbBoard.SelectedIndex = 0;
+            cmbBoardType = cmbBoard;   // kept so the choice is saved/restored (11/01/26)
             cmbBoard.SelectedIndexChanged += (s, e) =>
             {
                 _boardType = cmbBoard.SelectedIndex == 1 ? BoardType.SCK2400 : BoardType.SCK915;
@@ -1049,8 +1193,7 @@ namespace OpenLstGroundStation
                 BorderStyle     = BorderStyle.FixedSingle,
                 Font            = Theme.FontMono,
                 PlaceholderText = "path to firmware .hex",
-                Text            = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT,
-                                               "Debug", $"{SCK2400_PROJECT}.hex"),
+                Text            = Sck2400FirmwareHex,
             };
             var btnOadBrowse = MkButton("…", col1 + 310, row, 32, Theme.Gray, Theme.PanelBack);
             btnOadBrowse.Click += (s, e) =>
@@ -1093,6 +1236,31 @@ namespace OpenLstGroundStation
 
             row += 36;
 
+            // Set Golden Image: CMD_OAD_SET_GOLDEN (0x15). The board copies its
+            // running, confirmed firmware to the golden slot in ext flash. The BIM
+            // falls back to it if a new image is never confirmed (trial boot).
+            // Do once at production, and after any update you want as the fallback.
+            var btnOadGolden = MkButton("Set Golden Image", col1, row, 170, Theme.Yellow, Theme.PanelBack);
+            btnOadGolden.Click += async (s, e) =>
+            {
+                if (_boardType != BoardType.SCK2400) { Log("OAD: SCK-2400 only.", Theme.Yellow); return; }
+                if (_oadCts != null) { Log("OAD in progress — wait for it to finish.", Theme.Yellow); return; }
+                var ok = MessageBox.Show(
+                    $"Copy the firmware running on board 0x{ActiveHwid:X3} to its golden slot?\n\n" +
+                    "The golden image is what the board falls back to if a future\n" +
+                    "update is never confirmed. Only do this with firmware you have\n" +
+                    "tested on this board.\n\nTakes up to about a minute.",
+                    "Set Golden Image", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (ok != DialogResult.Yes) return;
+                btnOadGolden.Enabled = false;
+                try   { await SendOadSetGoldenAsync(); }
+                finally { btnOadGolden.Enabled = true; }
+            };
+            p.Controls.Add(btnOadGolden);
+            _sck2400OnlyControls.Add(btnOadGolden);
+
+            row += 36;
+
             // Progress label — updated during chunk delivery.
             lblOadProgress = MkLabel("", col1, row, 500, Theme.Gray);
             p.Controls.Add(lblOadProgress);
@@ -1114,7 +1282,10 @@ namespace OpenLstGroundStation
             };
             foreach (int ms in new[] { 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 })
                 cmbOadDelay.Items.Add($"{ms} ms");
-            cmbOadDelay.SelectedIndex = 0; // default 10ms (floor confirmed)
+            // Default 30 ms (11/09/26): the GS board now forwards OAD chunks without
+            // a reply window; 30 ms leaves room for RF airtime (~6 ms), remote
+            // decrypt and two MX25R page programs per 128-byte chunk.
+            cmbOadDelay.SelectedIndex = 2;
             p.Controls.Add(cmbOadDelay);
 
             row += 28;
@@ -1184,10 +1355,31 @@ namespace OpenLstGroundStation
                 "Remote 2  (APID 0x012)",
             });
             cmbBoardRole.SelectedIndex = 0;
-            var lblBoardRoleNote = MkLabel(
-                "Sets SCK_APID_THIS_BOARD — flash GS first, then remote",
-                lx + 288, row + 5, 360, Theme.Gray, Theme.FontSmall);
-            p.Controls.AddRange(new Control[] { cmbBoardRole, lblBoardRoleNote });
+            _boardTooltip.SetToolTip(cmbBoardRole,
+                "Sets SCK_APID_THIS_BOARD — flash GS first, then remote");
+
+            // ── SCK-2400 hardware target (added 11/01/26 for V3 bring-up) ──
+            // Picks the CCS build configuration, the srfprog device name and
+            // the RF switch logic (RF_SWITCH_SKYA21001) patched into radio.h.
+            // See SCK2400_HARDWARE below for the table.
+            p.Controls.Add(MkLabel("Hardware:", lx + 290, row + 3, 72, Theme.Gray));
+            cmbHardware = new ComboBox
+            {
+                Location      = new Point(lx + 364, row),
+                Size          = new Size(264, 26),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.Cyan,
+                Font          = Theme.FontMono,
+            };
+            foreach (var hwItem in SCK2400_HARDWARE) cmbHardware.Items.Add(hwItem.Label);
+            cmbHardware.SelectedIndex = 0;
+            cmbHardware.SelectedIndexChanged += (s, e) => OnSck2400HardwareChanged();
+            _boardTooltip.SetToolTip(cmbHardware,
+                "SCK-2400 only. Sets the CCS build configuration, srfprog device\n" +
+                "and RF switch logic. LaunchPad = CC1352P / SKY13317,\n" +
+                "SCK-2400 V3 = CC2652P / SKYA21001.");
+            p.Controls.AddRange(new Control[] { cmbBoardRole, cmbHardware });
             row += 36;
 
             btnBuild = MkButton("▶ Build", lx, row, 110, Theme.Yellow, Theme.PanelBack);
@@ -1217,7 +1409,7 @@ namespace OpenLstGroundStation
             var pnlPower = new Panel
             {
                 Location  = new Point(lx, row),
-                Size      = new Size(630, 52),
+                Size      = new Size(630, 96),
                 BackColor = Theme.PanelBack,
             };
             pnlPower.Paint += (s, e) =>
@@ -1234,7 +1426,7 @@ namespace OpenLstGroundStation
                 ForeColor = Color.FromArgb(100, 160, 255),
                 BackColor = Color.Transparent,
                 Font      = Theme.FontMono,
-                Checked   = true,
+                Checked   = false,
             };
 
             rbPowerField = new RadioButton
@@ -1245,12 +1437,12 @@ namespace OpenLstGroundStation
                 ForeColor = Color.OrangeRed,
                 BackColor = Color.Transparent,
                 Font      = Theme.FontMono,
-                Checked   = false,
+                Checked   = true,
             };
 
             var lblPowerNote = new Label
             {
-                Text      = "SCK-915: patches RF_PA_CONFIG in board.h  |  SCK-2400: patches TX_POWER in radio.h",
+                Text      = "SCK-915: patches RF_PA_CONFIG in board.h  |  SCK-2400: patches SCK_TXPWR_MODE in radio.h",
                 Location  = new Point(12, 30),
                 Size      = new Size(600, 16),
                 ForeColor = Theme.Gray,
@@ -1258,9 +1450,105 @@ namespace OpenLstGroundStation
                 Font      = Theme.FontSmall,
             };
 
-            pnlPower.Controls.AddRange(new Control[] { rbPowerBench, rbPowerField, lblPowerNote });
+            // ── PA Table Override (bench testing) ──────────────────────────
+            // ============================================================
+            // OPEN SOURCE NOTE: values below are real CC1101 PATABLE
+            // entries at 915MHz, from TI Design Note DN013 (SWRA151A)
+            // Table 4 -- the standalone dBm figures shown are CC1101's
+            // own output BEFORE the CC1190 front end, not the combined
+            // total (that's exactly what this control exists to help
+            // characterize). 0x80 is TI's own AN096 reference-design
+            // value for the CC1101-CC1190EM 915MHz board. When set to
+            // anything other than "(none)", this OVERRIDES the Bench/
+            // Field radio buttons above for the next build -- clearly
+            // logged as a CUSTOM OVERRIDE, not a normal Bench/Field
+            // patch, so it's never ambiguous which was actually built.
+            // ============================================================
+            var lblPaOverride = new Label
+            {
+                Text      = "PA Table Override:",
+                Location  = new Point(12, 48),
+                Size      = new Size(140, 20),
+                ForeColor = Theme.Yellow,
+                BackColor = Color.Transparent,
+                Font      = Theme.FontSmall,
+            };
+            cmbPaTableOverride = new ComboBox
+            {
+                Location      = new Point(156, 46),
+                Size          = new Size(340, 24),
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.White,
+                Font          = Theme.FontSmall,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+            };
+            cmbPaTableOverride.Items.AddRange(new object[]
+            {
+                "(none — use Bench/Field selection above)",
+                "0xC3 (~8.3dBm CC1101 standalone)",
+                "0xC4 (~7.9dBm CC1101 standalone)",
+                "0xC5 (~7.6dBm CC1101 standalone)",
+                "0xC6 (~7.2dBm CC1101 standalone)",
+                "0xC7 (~6.9dBm CC1101 standalone)",
+                "0xC8 (~6.6dBm CC1101 standalone)",
+                "0xC9 (~6.2dBm CC1101 standalone)",
+                "0xCA (~5.9dBm CC1101 standalone; TESTED 2026-08 — collapsed to -57.2dBm calibrated, no signal confirmed across 20 attempts)",
+                "0xCC (~5.3dBm CC1101 standalone)",
+                "0xCD (~5.0dBm CC1101 standalone)",
+                "0xCE (~4.3dBm CC1101 standalone)",
+                "0xCF (~1.6dBm CC1101 standalone)",
+                "0x80 (~4.9dBm CC1101 standalone — TI AN096 reference; TESTED 2026-08 — collapsed to -58.2dBm calibrated, ~80dB below 0xC0/0xC2 despite only ~4dB less standalone drive)",
+                "0x83 (~4.2dBm CC1101 standalone)",
+                "0x86 (~3.3dBm CC1101 standalone)",
+                "0x89 (~2.2dBm CC1101 standalone)",
+                "0x8C (~0.9dBm CC1101 standalone)",
+                "0x8E (~-0.6dBm CC1101 standalone)",
+            });
+            cmbPaTableOverride.SelectedIndex = 0;
+
+            var lblPaOverrideNote = new Label
+            {
+                Text      = "DN013 SWRA151A Table 4 (915MHz) values. Overrides Bench/Field for the next build only.",
+                Location  = new Point(12, 74),
+                Size      = new Size(600, 16),
+                ForeColor = Theme.Gray,
+                BackColor = Color.Transparent,
+                Font      = Theme.FontSmall,
+            };
+
+            // ── SCK-2400 CW carrier test (bring-up only) ───────────────────
+            // Patches SCK_RF_CW_TEST in radio.h. Checked = the firmware keys an
+            // unmodulated carrier at 2440 MHz forever after boot (no beacon, no
+            // RX, no commands) at the Bench/Field power above. Never saved:
+            // always starts unchecked so a CW image can't be built by accident.
+            chkCwTest = new CheckBox
+            {
+                Text      = "⚠ CW test",
+                Location  = new Point(506, 46),
+                Size      = new Size(118, 24),
+                ForeColor = Color.Orange,
+                BackColor = Color.Transparent,
+                Font      = Theme.FontSmall,
+                Checked   = false,
+            };
+            chkCwTest.CheckedChanged += (s, e) =>
+            {
+                if (chkCwTest.Checked)
+                    Log("⚠ CW test ON — next SCK-2400 build transmits a continuous carrier. " +
+                        "Bench/RF only, never flight. Use a 30 dB pad on the analyzer.", Theme.Yellow);
+                else
+                    Log("CW test OFF — next SCK-2400 build is normal firmware.", Theme.Cyan);
+            };
+            _boardTooltip.SetToolTip(chkCwTest,
+                "SCK-2400 only. Builds firmware that transmits an unmodulated carrier\n" +
+                "at 2440 MHz continuously (SCK_RF_CW_TEST=1), at the Bench/Field power.\n" +
+                "For TinySA power/frequency checks. Always starts unchecked.");
+
+            pnlPower.Controls.AddRange(new Control[] {
+                rbPowerBench, rbPowerField, lblPowerNote,
+                lblPaOverride, cmbPaTableOverride, lblPaOverrideNote, chkCwTest });
             p.Controls.Add(pnlPower);
-            row += 62;
+            row += 106;
 
             p.Controls.Add(MkSectionLabel("── Sign & Flash", lx, row));
             row += 28;
@@ -1820,8 +2108,12 @@ namespace OpenLstGroundStation
                 // Any packet destined for a different APID goes over RF and must be encrypted.
                 if (_boardType == BoardType.SCK2400)
                 {
+                    // 11/2026: this used to log "Physical board APID captured"
+                    // but it only copied the APID box. The app can't tell which
+                    // board is on USB; say what actually happens instead.
                     _physicalBoardApid = ActiveHwid;
-                    Log($"Physical board APID captured: 0x{_physicalBoardApid:X3} -- RF crypto active for remote APIDs", Theme.Cyan);
+                    Log($"Destination APID 0x{ActiveHwid:X3}. The board on this port answers its own APID; " +
+                        "anything addressed to another board is relayed over RF (encrypted in firmware).", Theme.Cyan);
                     // Crypto keys live in firmware security.h only.
                     // C# sends plaintext -- GS board firmware handles all encryption.
                     UpdateRfStatusLabel();
@@ -1887,6 +2179,14 @@ namespace OpenLstGroundStation
                         foreach (var pkt in packets)
                         {
                             _rxQueue.Enqueue(pkt);
+
+                            // Any unsolicited "ascii" broadcast only fires
+                            // right after a reset (bootloader or app boot
+                            // identification string) -- flag it for the
+                            // QA Wizard's scan retry logic. See
+                            // _wizardBootloaderSeen's own comment.
+                            if (pkt.OpName == "ascii")
+                                _wizardBootloaderSeen = true;
 
                             if (pkt.OpName == "telem" && pkt.Hwid == ActiveHwid)
                             {
@@ -2005,9 +2305,9 @@ namespace OpenLstGroundStation
             }
         }
 
-        private async Task SendGetTelemAsync()
+        private async Task<bool> SendGetTelemAsync()
         {
-            if (!CheckConnected()) return;
+            if (!CheckConnected()) return false;
             if (_boardType == BoardType.SCK2400)
             {
                 ushort seq      = IncCcsdsSeqCount();
@@ -2021,8 +2321,10 @@ namespace OpenLstGroundStation
                     Log($"  ✓ tlm_beacon received seq={seq} from 0x{destApid:X3}", Theme.Green);
                     var td = CcsdsProtocol.ParseTelem(pkt.RawPayload);
                     if (td != null) UpdateCcsdsTelemDisplay(td);
+                    return true;
                 }
-                else Log("  ✗ No telem reply", Theme.Red);
+                Log("  ✗ No telem reply", Theme.Red);
+                return false;
             }
             else
             {
@@ -2036,9 +2338,15 @@ namespace OpenLstGroundStation
                 {
                     Log($"  ✓ telem received  hwid={pkt.Hwid:X4}", Theme.Green);
                     var td = OpenLstProtocol.ParseTelem(pkt.RawPayload);
-                    if (td != null) UpdateTelemDisplay(td);
+                    if (td != null)
+                    {
+                        UpdateTelemDisplay(td);
+                        _lastOpenLstTelem = td;  // exposes Custom0 (power mode) to the QA Wizard
+                    }
+                    return true;
                 }
-                else Log("  ✗ No telem reply", Theme.Red);
+                Log("  ✗ No telem reply", Theme.Red);
+                return false;
             }
         }
 
@@ -2047,6 +2355,50 @@ namespace OpenLstGroundStation
         //  These exercise the ext flash driver from firmware task context.
         //  Use in order: Flash Status first (no flash), then Flash Open Test.
         // ══════════════════════════════════════════════════════════════════
+
+        private const byte CMD_OAD_SET_GOLDEN = 0x15;
+
+        private async Task SendOadSetGoldenAsync()
+        {
+            // CMD_OAD_SET_GOLDEN (0x15), no args.
+            // ACK: [0x15][status][err][len3][len2][len1][len0]
+            if (!CheckConnected()) return;
+            ushort seq      = IncCcsdsSeqCount();
+            ushort destApid = ActiveHwid;
+            FlushRxQueue();
+            WritePacket(CcsdsProtocol.BuildSimpleCommand(seq, CMD_OAD_SET_GOLDEN, destApid));
+            LogTx($"[CCSDS] oad_set_golden seq={seq} dest=0x{destApid:X3}", 0);
+            Log("  Copying running firmware to the golden slot (up to ~60 s)...", Theme.Cyan);
+            var pkt = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, seq, 90000);
+            if (pkt == null) { Log("  ✗ No reply to set_golden.", Theme.Red); return; }
+            var r = pkt.RawPayload;
+            if (r.Length >= 7 && r[0] == CMD_OAD_SET_GOLDEN)
+            {
+                uint len = (uint)((r[3] << 24) | (r[4] << 16) | (r[5] << 8) | r[6]);
+                if (r[1] == 0x00)
+                    Log($"  ✓ Golden image set ({len} bytes).", Theme.Green);
+                else
+                {
+                    string why = r[2] switch
+                    {
+                        0x01 => "an OAD session is active",
+                        0x02 => "running image is still on trial — send any command (e.g. Get Telem) to confirm it first",
+                        0x03 => "bad image length in the app header",
+                        0x04 => "external flash open failed",
+                        0x05 => "external flash erase failed",
+                        0x06 => "external flash write failed",
+                        0x07 => "verify mismatch",
+                        0x08 => "golden record write failed",
+                        _    => $"error 0x{r[2]:X2}",
+                    };
+                    Log($"  ✗ Set golden failed: {why}", Theme.Red);
+                }
+            }
+            else if (r.Length >= 2 && r[1] == 0xE0)
+                Log("  ✗ Board is in safe mode — clear safe mode first.", Theme.Red);
+            else
+                Log($"  ✗ Unexpected reply ({r.Length} bytes) — firmware may predate golden support.", Theme.Red);
+        }
 
         private async Task SendOadStatusAsync()
         {
@@ -2068,6 +2420,20 @@ namespace OpenLstGroundStation
                               (pkt.RawPayload[4] << 8)  |  pkt.RawPayload[5])
                     : 0;
                 Log($"  ✓ oad_status: active={active}  bytesReceived={rxd}", Theme.Green);
+                // 11/09 firmware appends [sz0][trialState][bootsUsed][golden]
+                if (pkt.RawPayload.Length >= 13)
+                {
+                    string trial = pkt.RawPayload[10] switch
+                    {
+                        0 => "none",
+                        1 => "PENDING (new image not yet confirmed)",
+                        2 => "REJECTED (new image failed; running fallback)",
+                        3 => "confirmed",
+                        _ => $"unknown ({pkt.RawPayload[10]})",
+                    };
+                    Log($"    trial: {trial}  boots used: {pkt.RawPayload[11]}  golden image: {(pkt.RawPayload[12] == 1 ? "present" : "NONE")}",
+                        pkt.RawPayload[12] == 1 ? Theme.Cyan : Theme.Yellow);
+                }
             }
             else if (pkt != null)
                 Log($"  ✓ oad_status ACK (short payload)", Theme.Green);
@@ -2197,12 +2563,108 @@ namespace OpenLstGroundStation
             uint firstAddr = data.Keys.First();
             uint lastAddr  = data.Keys.Last();
             int  imgLen    = (int)(lastAddr - firstAddr + 1);
-            byte[] img     = new byte[imgLen]; // unfilled bytes = 0x00
+            byte[] img     = new byte[imgLen];
+            // Gaps = 0xFF (erased flash), so the OAD image is byte-for-byte what
+            // a J2 flash leaves in internal flash. The image CRC32 (header) and
+            // the golden copy both depend on this. (Was 0x00 before 11/09/26.)
+            Array.Fill(img, (byte)0xFF);
 
             foreach (var kv in data)
                 img[kv.Key - firstAddr] = kv.Value;
 
             return img;
+        }
+
+        // ── SCK image CRC32 (11/09/26) ────────────────────────────────────
+        // The build never ran TI's oad_image_tool, so the OAD header carried
+        // crc32 = 0xFFFFFFFF. The SCK BIM (Bim_sckCrc32) now checks every OAD
+        // copy and the golden image against this value. Algorithm must match
+        // the BIM exactly: CRC-32 IEEE (reflected 0xEDB88320, init/xorout
+        // 0xFFFFFFFF) over image bytes [12, len) -- skips imgID[8] + crc32[4].
+        private static uint SckImageCrc32(byte[] img, int len)
+        {
+            uint crc = 0xFFFFFFFF;
+            for (int i = 12; i < len; i++)
+            {
+                crc ^= img[i];
+                for (int b = 0; b < 8; b++)
+                    crc = (crc >> 1) ^ (0xEDB88320u & (uint)(-(int)(crc & 1)));
+            }
+            return ~crc;
+        }
+
+        // Computes the image CRC32 and writes it into the OAD header (app base
+        // 0x4000 + 8) of the firmware .hex in place. Returns false on any error.
+        private bool PatchSck2400ImageCrc32(string hexPath)
+        {
+            const uint APP_START = 0x00004000;
+            try
+            {
+                byte[]? img = Sck2400ParseFirmwareHex(hexPath);
+                if (img == null || img.Length < 0x30)
+                {
+                    Log("CRC32 patch: could not parse firmware hex.", Theme.Red);
+                    return false;
+                }
+                uint len = BitConverter.ToUInt32(img, 0x18);     // imgFixedHdr_t.len
+                if (len < 0x30 || len > img.Length)
+                {
+                    Log($"CRC32 patch: bad header len 0x{len:X} (image {img.Length} bytes).", Theme.Red);
+                    return false;
+                }
+                uint crc = SckImageCrc32(img, (int)len);
+                byte[] crcBytes = BitConverter.GetBytes(crc);    // little-endian
+
+                // Rewrite the data record(s) covering 0x4008..0x400B.
+                string[] lines = File.ReadAllLines(hexPath);
+                uint upper = 0;
+                int patched = 0;
+                for (int li = 0; li < lines.Length; li++)
+                {
+                    string line = lines[li];
+                    if (line.Length < 11 || line[0] != ':') continue;
+                    int  cnt  = Convert.ToInt32(line.Substring(1, 2), 16);
+                    uint addr = Convert.ToUInt32(line.Substring(3, 4), 16);
+                    int  type = Convert.ToInt32(line.Substring(7, 2), 16);
+                    if (type == 0x04) { upper = Convert.ToUInt32(line.Substring(9, 4), 16) << 16; continue; }
+                    if (type != 0x00) continue;
+                    uint full = upper | addr;
+                    byte[] rec = new byte[4 + cnt];
+                    for (int k = 0; k < 4 + cnt; k++)
+                        rec[k] = Convert.ToByte(line.Substring(1 + k * 2, 2), 16);
+                    bool changed = false;
+                    for (int k = 0; k < 4; k++)
+                    {
+                        uint a = APP_START + 8 + (uint)k;
+                        if (a >= full && a < full + (uint)cnt)
+                        {
+                            rec[4 + (a - full)] = crcBytes[k];
+                            changed = true; patched++;
+                        }
+                    }
+                    if (!changed) continue;
+                    int sum = 0;
+                    foreach (byte bb in rec) sum += bb;
+                    byte chk = (byte)((-sum) & 0xFF);
+                    var sb = new System.Text.StringBuilder(":");
+                    foreach (byte bb in rec) sb.Append(bb.ToString("X2"));
+                    sb.Append(chk.ToString("X2"));
+                    lines[li] = sb.ToString();
+                }
+                if (patched != 4)
+                {
+                    Log($"CRC32 patch: header bytes not found in hex ({patched}/4).", Theme.Red);
+                    return false;
+                }
+                File.WriteAllLines(hexPath, lines);
+                Log($"Image CRC32 patched: 0x{crc:X8} over 0x{len:X} bytes", Theme.Green);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log($"CRC32 patch: {ex.Message}", Theme.Red);
+                return false;
+            }
         }
 
         // ── Crc16Ccitt ────────────────────────────────────────────────────
@@ -2235,6 +2697,99 @@ namespace OpenLstGroundStation
         //
         // Inter-chunk delay must be >= 18ms (8ms on-air + 10ms RF yield).
         // Use cmbOadDelay to tune empirically.
+        // ── Build record (11/2026) ────────────────────────────────────────
+        // After every successful SCK-2400 build the app writes
+        // <hex>.sckbuild next to the hex: which board it was built for and
+        // the image CRC-32. Start OAD reads it to pick / check the target.
+        private sealed class SckBuildRecord
+        {
+            public string Apid     { get; set; } = "";   // "0x011"
+            public string Role     { get; set; } = "";   // "Remote 1  (APID 0x011)"
+            public string Hardware { get; set; } = "";
+            public string Crc32    { get; set; } = "";   // "0x5B211D8A"
+            public string Built    { get; set; } = "";
+        }
+
+        private static string SckBuildRecordPath(string hexPath) => hexPath + ".sckbuild";
+
+        // CRC-32 stored in the OAD image header (0x4008) of a parsed image.
+        private static uint SckImageHeaderCrc32(byte[] img)
+            => img.Length >= 12 ? BitConverter.ToUInt32(img, 8) : 0;
+
+        private void WriteSckBuildRecord(string hexPath, string apid, string role, string hardware)
+        {
+            try
+            {
+                byte[]? img = Sck2400ParseFirmwareHex(hexPath);
+                if (img == null) return;
+                var rec = new SckBuildRecord
+                {
+                    Apid     = apid,
+                    Role     = role,
+                    Hardware = hardware,
+                    Crc32    = $"0x{SckImageHeaderCrc32(img):X8}",
+                    Built    = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                };
+                var opts = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(SckBuildRecordPath(hexPath),
+                    System.Text.Json.JsonSerializer.Serialize(rec, opts));
+                Log($"Build record: {Path.GetFileName(SckBuildRecordPath(hexPath))} → {role}, CRC32 {rec.Crc32}", Theme.Gray);
+            }
+            catch (Exception ex)
+            {
+                Log($"Build record not written: {ex.Message}", Theme.Yellow);
+            }
+        }
+
+        // Returns the record only if it matches this exact image (same CRC-32),
+        // so a hex rebuilt outside the app is treated as unknown.
+        private SckBuildRecord? ReadSckBuildRecord(string hexPath, byte[] img)
+        {
+            try
+            {
+                string p = SckBuildRecordPath(hexPath);
+                if (!File.Exists(p)) return null;
+                var rec = System.Text.Json.JsonSerializer.Deserialize<SckBuildRecord>(File.ReadAllText(p));
+                if (rec == null) return null;
+                string crcNow = $"0x{SckImageHeaderCrc32(img):X8}";
+                return string.Equals(rec.Crc32, crcNow, StringComparison.OrdinalIgnoreCase) ? rec : null;
+            }
+            catch { return null; }
+        }
+
+        // Asks the operator to confirm where the OAD goes. Returns the APID to
+        // use, or null to cancel. Uses the build record when it matches.
+        private ushort? ConfirmOadDestination(string hexPath, byte[] img, ushort boxApid)
+        {
+            var rec = ReadSckBuildRecord(hexPath, img);
+            ushort recApid = 0;
+            bool haveRec = rec != null &&
+                           ushort.TryParse(rec.Apid.Replace("0x", "").Replace("0X", ""),
+                               System.Globalization.NumberStyles.HexNumber, null, out recApid);
+            string crc = $"0x{SckImageHeaderCrc32(img):X8}";
+
+            if (haveRec && recApid != boxApid)
+            {
+                var r = MessageBox.Show(this,
+                    $"This firmware was built for {rec!.Role}\n({rec.Hardware}, CRC32 {crc}).\n\n" +
+                    $"The APID box is set to 0x{boxApid:X3}.\n\n" +
+                    $"Send the update to 0x{recApid:X3} instead?\n\n" +
+                    "Yes = send to the board it was built for\nNo = cancel",
+                    "OAD destination mismatch", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button1);
+                return r == DialogResult.Yes ? recApid : (ushort?)null;
+            }
+
+            string text = haveRec
+                ? $"Send firmware built for {rec!.Role}\n({rec.Hardware}, CRC32 {crc})\nto board 0x{boxApid:X3}?"
+                : $"No build record matches this file (built outside this app, or changed since).\n" +
+                  $"CRC32 {crc}\n\nSend it to 0x{boxApid:X3} (the APID box)?";
+            var ok = MessageBox.Show(this, text, "Confirm OAD", MessageBoxButtons.YesNo,
+                haveRec ? MessageBoxIcon.Question : MessageBoxIcon.Warning,
+                haveRec ? MessageBoxDefaultButton.Button1 : MessageBoxDefaultButton.Button2);
+            return ok == DialogResult.Yes ? boxApid : (ushort?)null;
+        }
+
         private async Task SendOadUpdateAsync(string hexPath, CancellationToken ct)
         {
             if (!CheckConnected()) return;
@@ -2257,7 +2812,17 @@ namespace OpenLstGroundStation
                 int.TryParse(delayStr.Replace(" ms", ""), out interChunkMs);
             Log($"OAD: streaming mode — inter-chunk delay {interChunkMs}ms, no per-chunk ACK", Theme.Cyan);
 
-            ushort destApid = ActiveHwid;
+            // ── Destination check (11/2026) ───────────────────────────────
+            // The OAD goes to the APID box, which is easy to leave on 0x010
+            // (the GS board itself). The build record written next to the
+            // hex says which board the image was built for; use it.
+            ushort? destChecked = ConfirmOadDestination(hexPath, img, ActiveHwid);
+            if (destChecked == null)
+            { Log("OAD: cancelled — destination not confirmed.", Theme.Yellow); return; }
+            ushort destApid = destChecked.Value;
+            if (destApid != ActiveHwid)
+                txtHwid.Text = destApid.ToString("X3");   // follow-up commands go to the same board
+            Log($"OAD: destination 0x{destApid:X3}", Theme.Cyan);
 
             // ── Step 2: CMD_OAD_START ─────────────────────────────────────
             // This is the only blocking handshake before streaming.
@@ -2290,7 +2855,11 @@ namespace OpenLstGroundStation
             // Firmware writes each chunk to ext flash silently.
             // Progress is based on transmit position, not ACK receipt.
             // Final CRC at oad_end is the truth — retry whole image if it fails.
-            const int CHUNK_SIZE  = 240;
+            // 128 = firmware OAD_CHUNK_SIZE (uart.c rejects anything larger), and
+            // keeps the encrypted RF packet (27 B overhead + chunk) under the
+            // 255-byte radio limit. Was 240 until 11/09/26: every chunk was
+            // NACKed and the image never landed in ext flash.
+            const int CHUNK_SIZE  = 128;
             int       totalChunks = (img.Length + CHUNK_SIZE - 1) / CHUNK_SIZE;
             int       chunkIdx    = 0;
             uint      bytesSent   = 0;
@@ -2436,7 +3005,9 @@ namespace OpenLstGroundStation
                 FlushRxQueue();
                 WritePacket(CcsdsProtocol.BuildSimpleCommand(pollSeq,
                     CcsdsProtocol.CMD_GET_TELEM, destApid));
-                var resp = await WaitForReply(CcsdsProtocol.APID_CMD_ACK, pollSeq, 2000);
+                // get_telem answers with APID_TLM_BEACON, not CMD_ACK (fixed 11/09/26:
+                // this poll could never succeed before).
+                var resp = await WaitForReply(CcsdsProtocol.APID_TLM_BEACON, pollSeq, 2000);
                 if (resp != null)
                 {
                     Log($"✓ Board 0x{destApid:X3} responded after OAD reboot — new firmware is running!", Theme.Green);
@@ -2941,7 +3512,7 @@ namespace OpenLstGroundStation
                 _flightWriter.WriteLine($"  \"date\": \"{DateTime.Now:yyyy-MM-dd}\",");
                 _flightWriter.WriteLine($"  \"launch_time\": \"{DateTime.Now:HH:mm:ss}\",");
                 _flightWriter.WriteLine($"  \"hardware\": \"SCK-915 + SCK-PBL-1\",");
-                _flightWriter.WriteLine($"  \"ground_station\": \"SCK Ground Station v1.2.0\",");
+                _flightWriter.WriteLine($"  \"ground_station\": \"SCK Ground Station v1.3.0\",");
                 _flightWriter.WriteLine($"  \"hwid\": \"{ActiveHwid:X4}\",");
                 _flightWriter.WriteLine("  \"packets\": [");
                 _flightWriter.Flush();
@@ -3280,6 +3851,12 @@ Max altitude: {maxAlt:F1}m ASL</description>
             {
                 SetFirmwareButtons(true);
                 pbFlash.Style = ProgressBarStyle.Continuous;
+                // Minimum reset first -- see the large fix note where
+                // pbFlash.Minimum/Maximum are set during an actual flash
+                // (search RunFlashAsync-style code for "BUG FIXED (August
+                // 2026)") for why Value=0 alone is unsafe here across
+                // repeated build/flash runs in the same session.
+                pbFlash.Minimum = 0;
                 pbFlash.Value = 0;
             }
         }
@@ -3337,8 +3914,23 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (boardH == null)
             { Log("board.h not found in project directory.", Theme.Red); return false; }
 
-            string paValue = rbPowerField.Checked ? "0xC2" : "0xC0";
-            string paLabel = rbPowerField.Checked ? "Max (~28 dBm with CC1190)" : "0 dBm bench";
+            // Check for a PA table override first -- if set, it takes over
+            // for this build regardless of the Bench/Field radio buttons.
+            // Extracts the "0xNN" token from the front of the dropdown's
+            // display text (e.g. "0x80 (~4.9dBm..." -> "0x80").
+            bool isOverride = cmbPaTableOverride.SelectedIndex > 0;
+            string paValue, paLabel;
+            if (isOverride)
+            {
+                string sel = cmbPaTableOverride.SelectedItem!.ToString()!;
+                paValue = sel.Split(' ')[0];  // "0x80" from "0x80 (~4.9dBm...)"
+                paLabel = "CUSTOM OVERRIDE — bench PA table test, NOT a Bench/Field build";
+            }
+            else
+            {
+                paValue = rbPowerField.Checked ? "0xC2" : "0xC0";
+                paLabel = rbPowerField.Checked ? "Max (~28 dBm with CC1190)" : "0 dBm bench";
+            }
 
             try
             {
@@ -3376,7 +3968,8 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 }
 
                 File.WriteAllText(boardH, cleaned);
-                Log($"RF Power: patched board.h → RF_PA_CONFIG = {paValue} ({paLabel})", Theme.Cyan);
+                Log($"RF Power: patched board.h → RF_PA_CONFIG = {paValue} ({paLabel})",
+                    isOverride ? Theme.Yellow : Theme.Cyan);
                 return true;
             }
             catch (Exception ex)
@@ -3391,7 +3984,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (_boardType == BoardType.SCK2400)
             {
                 await RunBuildAsync_SCK2400(cleanFirst: false);
-                string hex = Path.Combine(txtProjectDir.Text, "Debug", "sck2400_firmware.hex");
+                string hex = Sck2400FirmwareHex;
                 if (File.Exists(hex)) await RunFlashLocal_SCK2400(hex);
                 return;
             }
@@ -3433,6 +4026,81 @@ Max altitude: {maxAlt:F1}m ASL</description>
         private string SCK2400_WORKSPACE  { get => _sck2400Workspace;  set { _sck2400Workspace  = value; SaveSettings(); } }
         private string SCK2400_XDSDFU     { get => _sck2400XdsDfu;    set { _sck2400XdsDfu    = value; SaveSettings(); } }
 
+        // ── SCK-2400 hardware targets (added 11/01/26) ─────────────────────
+        // One row per physical board type. Everything that differs between
+        // the LaunchPad and the SCK-2400 V3 PCB lives here:
+        //   CcsConfig   CCS build configuration (also its output folder name).
+        //               "V3" must exist in sck2400_firmware: device CC2652P1F,
+        //               builds sck2400_v3.syscfg instead of sck2400.syscfg.
+        //   SrfDevice   srfprog -t soc(XDS-serial, <SrfDevice>) name. "CC2652P"
+        //               confirmed by SmartRF Flash Programmer 2 on V3 board #1.
+        //   SkyA21001   RF_SWITCH_SKYA21001 value patched into radio.h.
+        //   BimFolder   sck2400_bim output folder. The BIM checks the app's OAD
+        //               image ID, which follows the chip family: LaunchPad app =
+        //               "CC13x2R1" (build_bim.bat -> Debug\), V3 app = "CC26x2R1"
+        //               (build_bim_v3.bat -> V3\). Wrong BIM = app never starts.
+        private sealed record Sck2400Hw(string Label, string CcsConfig,
+                                        string SrfDevice, bool SkyA21001,
+                                        string BimFolder);
+
+        private static readonly Sck2400Hw[] SCK2400_HARDWARE =
+        {
+            new("LaunchPad  (CC1352P, SKY13317)",  "Debug", "CC1352P", false, "Debug"),
+            new("SCK-2400 V3 (CC2652P, SKYA21001)", "V3",    "CC2652P", true,  "V3"),
+        };
+
+        private ComboBox cmbHardware = null!;
+
+        // Top-bar Board selector (SCK-915 / SCK-2400). Saved in appsettings.json
+        // since 11/01/26 -- it used to reset to SCK-915 on every start, which sent
+        // the Flash button down the SCK-915 OTA path for an SCK-2400 hex.
+        private ComboBox? cmbBoardType;
+
+        private Sck2400Hw Sck2400Hardware =>
+            SCK2400_HARDWARE[Math.Clamp(cmbHardware?.SelectedIndex ?? 0, 0,
+                                        SCK2400_HARDWARE.Length - 1)];
+
+        private string Sck2400OutDir =>
+            Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, Sck2400Hardware.CcsConfig);
+
+        private string Sck2400FirmwareHex =>
+            Path.Combine(Sck2400OutDir, $"{SCK2400_PROJECT}.hex");
+
+        private string Sck2400BimHex =>
+            Path.Combine(SCK2400_WORKSPACE, "sck2400_bim", Sck2400Hardware.BimFolder, "sck2400_bim.hex");
+
+        private string Sck2400BimScript =>
+            Sck2400Hardware.BimFolder == "V3" ? "build_bim_v3.bat" : "build_bim.bat";
+
+        // Keep the default hex paths pointing at the selected target's output.
+        // Only replaces a path that is one of the known defaults, so a hex the
+        // user browsed to by hand is left alone.
+        private void OnSck2400HardwareChanged()
+        {
+            var hw = Sck2400Hardware;
+            var defaults = SCK2400_HARDWARE
+                .Select(h => Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, h.CcsConfig,
+                                          $"{SCK2400_PROJECT}.hex"))
+                .ToList();
+            if (txtOadHexPath != null && defaults.Contains(txtOadHexPath.Text.Trim()))
+                txtOadHexPath.Text = Sck2400FirmwareHex;
+            if (txtFirmwareFile != null && defaults.Contains(txtFirmwareFile.Text.Trim()))
+                txtFirmwareFile.Text = Sck2400FirmwareHex;
+            Log($"SCK-2400 hardware: {hw.Label.Trim()}  →  CCS config '{hw.CcsConfig}', " +
+                $"srfprog {hw.SrfDevice}, RF_SWITCH_SKYA21001={(hw.SkyA21001 ? 1 : 0)}", Theme.Cyan);
+            SaveSettings();
+        }
+
+        // Soft check that the CCS build configuration exists, so a missing
+        // "V3" configuration gives a clear message instead of a CCS error.
+        private bool Sck2400ConfigExists(string config)
+        {
+            string cproject = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, ".cproject");
+            if (!File.Exists(cproject)) return true;      // can't tell -- let CCS decide
+            string text = File.ReadAllText(cproject);
+            return text.Contains($"name=\"{config}\"");
+        }
+
         // Board role APID values — match ccsds.h SCK_APID_BOARD_* defines
         private static readonly (string Label, string Define)[] SCK2400_BOARD_ROLES =
         {
@@ -3462,9 +4130,25 @@ Max altitude: {maxAlt:F1}m ASL</description>
             string apid      = Sck2400BoardApid;
             string boardLabel = Sck2400BoardLabel.Trim();
             string buildType  = cleanFirst ? "full" : "incremental";
+            var    hw         = Sck2400Hardware;
+            string outDir     = Sck2400OutDir;
+
+            if (!Sck2400ConfigExists(hw.CcsConfig))
+            {
+                Log($"✗ CCS build configuration '{hw.CcsConfig}' not found in " +
+                    $"{SCK2400_PROJECT}\\.cproject.", Theme.Red);
+                Log("  Create it in CCS (copy of Debug, device CC2652P1F, " +
+                    "build sck2400_v3.syscfg) or pick LaunchPad hardware.", Theme.Yellow);
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                lblFlashStatus.Text = "Build config missing.";
+                return;
+            }
+            Directory.CreateDirectory(outDir);   // working dir must exist for Process.Start
 
             Log("══════════════════════════════════════════════════", Theme.Cyan);
             Log($"  SCK-2400 Build  →  {boardLabel}", Theme.Cyan);
+            Log($"  Hardware: {hw.Label.Trim()}  (CCS config '{hw.CcsConfig}')", Theme.Cyan);
             Log($"  SCK_APID_THIS_BOARD = {apid}", Theme.Cyan);
             Log($"  Build type: {buildType}", Theme.Cyan);
             Log("══════════════════════════════════════════════════", Theme.Cyan);
@@ -3481,7 +4165,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                     $"-data \"{SCK2400_WORKSPACE}\"",
                     "-application com.ti.ccs.apps.buildProject",
                     $"-ccs.projects {SCK2400_PROJECT}",
-                    "-ccs.configuration Debug",
+                    $"-ccs.configuration {hw.CcsConfig}",
                     $"-ccs.buildType {buildType}",
                     "-ccs.listProblems",
                 });
@@ -3490,7 +4174,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 {
                     FileName               = SCK2400_CCS_SERVER,
                     Arguments              = args,
-                    WorkingDirectory       = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug"),
+                    WorkingDirectory       = outDir,
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
@@ -3530,14 +4214,13 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 await Task.WhenAll(stdoutTask, stderrTask);
                 await Task.Run(() => proc.WaitForExit());
 
-                string hex = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug",
-                    $"{SCK2400_PROJECT}.hex");
+                string hex = Sck2400FirmwareHex;
 
                 if (proc.ExitCode == 0 && File.Exists(hex))
                 {
                     txtFirmwareFile.Text = hex;
                     Log($"✓ Build succeeded: {hex}", Theme.Green);
-                    Log($"  Board: {boardLabel}  APID: {apid}", Theme.Cyan);
+                    Log($"  Board: {boardLabel}  APID: {apid}  Hardware: {hw.Label.Trim()}", Theme.Cyan);
 
                     // ── OAD post-build: auto-patch prgEntry ──────────────────
                     // Read .oad_entry_vec address from the linker map file.
@@ -3548,9 +4231,17 @@ Max altitude: {maxAlt:F1}m ASL</description>
                         Log("⚠ OAD prgEntry patch failed — firmware may not boot via BIM.", Theme.Yellow);
                         lblFlashStatus.Text = $"Build OK — {boardLabel} — OAD patch FAILED.";
                     }
+                    else if (!PatchSck2400ImageCrc32(hex))
+                    {
+                        Log("⚠ Image CRC32 patch failed — OAD copy / golden image checks will fail.", Theme.Yellow);
+                        lblFlashStatus.Text = $"Build OK — {boardLabel} — CRC32 patch FAILED.";
+                    }
                     else
                     {
-                        lblFlashStatus.Text = $"Build OK — {boardLabel} — ready to flash.";
+                        WriteSckBuildRecord(hex, apid, boardLabel, hw.Label.Trim());
+                        lblFlashStatus.Text = _lastBuildWasCwTest
+                            ? $"Build OK — {boardLabel} — ⚠ CW TEST image, not for flight."
+                            : $"Build OK — {boardLabel} — ready to flash.";
                     }
                 }
                 else if (proc.ExitCode != 0)
@@ -3573,15 +4264,21 @@ Max altitude: {maxAlt:F1}m ASL</description>
             {
                 SetFirmwareButtons(true);
                 pbFlash.Style = ProgressBarStyle.Continuous;
+                // Minimum reset first -- see the large fix note where
+                // pbFlash.Minimum/Maximum are set during an actual flash
+                // (search RunFlashAsync-style code for "BUG FIXED (August
+                // 2026)") for why Value=0 alone is unsafe here across
+                // repeated build/flash runs in the same session.
+                pbFlash.Minimum = 0;
                 pbFlash.Value = 0;
             }
         }
 
         private void RunClean_SCK2400()
         {
-            string debugDir = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug");
+            string debugDir = Sck2400OutDir;
             if (!Directory.Exists(debugDir))
-            { Log("Debug folder not found — nothing to clean.", Theme.Gray); return; }
+            { Log($"{Sck2400Hardware.CcsConfig} folder not found — nothing to clean.", Theme.Gray); return; }
 
             string[] extensions = { "*.o", "*.d_raw", "*.map", "*.xml", "*.out" };
             int deleted = 0;
@@ -3595,7 +4292,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 string hex = Path.Combine(debugDir, $"{SCK2400_PROJECT}.hex");
                 if (File.Exists(hex)) { File.Delete(hex); deleted++; }
 
-                Log($"SCK-2400 clean: {deleted} files removed from Debug\\", Theme.Cyan);
+                Log($"SCK-2400 clean: {deleted} files removed from {Sck2400Hardware.CcsConfig}\\", Theme.Cyan);
                 lblFlashStatus.Text = "Cleaned — ready to build.";
             }
             catch (Exception ex) { Log($"Clean error: {ex.Message}", Theme.Red); }
@@ -3618,7 +4315,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
         private async Task<bool> PatchOadPrgEntryAsync(string firmwareHex)
         {
             string projDir  = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT);
-            string debugDir = Path.Combine(projDir, "Debug");
+            string debugDir = Sck2400OutDir;
             string mapFile  = Path.Combine(debugDir, $"{SCK2400_PROJECT}.map");
             string hdrSrc   = Path.Combine(projDir, "oad_image_header_app.c");
             string hdrObj   = Path.Combine(debugDir, "oad_image_header_app.o");
@@ -3817,7 +4514,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                     $"-data \"{SCK2400_WORKSPACE}\"",
                     "-application com.ti.ccs.apps.buildProject",
                     $"-ccs.projects {SCK2400_PROJECT}",
-                    "-ccs.configuration Debug",
+                    $"-ccs.configuration {Sck2400Hardware.CcsConfig}",
                     "-ccs.buildType incremental",
                     "-ccs.listProblems",
                 });
@@ -3826,7 +4523,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 {
                     FileName               = SCK2400_CCS_SERVER,
                     Arguments              = args,
-                    WorkingDirectory       = Path.Combine(SCK2400_WORKSPACE, SCK2400_PROJECT, "Debug"),
+                    WorkingDirectory       = debugDir,
                     UseShellExecute        = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError  = true,
@@ -3884,11 +4581,11 @@ Max altitude: {maxAlt:F1}m ASL</description>
         // ══════════════════════════════════════════════════════════════════
         private async Task RunFlashBimAsync()
         {
-            string bimHex = Path.Combine(SCK2400_WORKSPACE, "sck2400_bim", "Debug", "sck2400_bim.hex");
+            string bimHex = Sck2400BimHex;
             if (!File.Exists(bimHex))
             {
                 Log($"BIM hex not found: {bimHex}", Theme.Red);
-                Log("Build BIM first using build_bim.bat in sck2400_bim\\", Theme.Yellow);
+                Log($"Build BIM first: {Sck2400BimScript} in sck2400_bim\\", Theme.Yellow);
                 return;
             }
             if (!File.Exists(SCK2400_SRFPROG))
@@ -3921,7 +4618,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
 
             try
             {
-                string args = $"-t soc(XDS-{xdsSerial}, CC1352P) -e all -p all -v rb -f \"{bimHex}\"";
+                string args = $"-t soc(XDS-{xdsSerial}, {Sck2400Hardware.SrfDevice}) -e all -p all -v rb -f \"{bimHex}\"";
                 Log($"srfprog {args}", Theme.Gray);
 
                 var psi = new ProcessStartInfo
@@ -3969,6 +4666,12 @@ Max altitude: {maxAlt:F1}m ASL</description>
             {
                 SetFirmwareButtons(true);
                 pbFlash.Style = ProgressBarStyle.Continuous;
+                // Minimum reset first -- see the large fix note where
+                // pbFlash.Minimum/Maximum are set during an actual flash
+                // (search RunFlashAsync-style code for "BUG FIXED (August
+                // 2026)") for why Value=0 alone is unsafe here across
+                // repeated build/flash runs in the same session.
+                pbFlash.Minimum = 0;
                 pbFlash.Value = 0;
             }
         }
@@ -4127,7 +4830,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
             // srfprog -e all erases everything then programs the merged image
             // in one pass — avoids BIM being wiped by a later firmware flash.
             string flashHex = hexPath;
-            string bimHex   = Path.Combine(SCK2400_WORKSPACE, "sck2400_bim", "Debug", "sck2400_bim.hex");
+            string bimHex   = Sck2400BimHex;
             if (File.Exists(bimHex))
             {
                 string mergedHex = Path.Combine(SCK2400_WORKSPACE, "sck2400_merged.hex");
@@ -4144,7 +4847,14 @@ Max altitude: {maxAlt:F1}m ASL</description>
             }
             else
             {
-                Log($"\u26a0 BIM hex not found at {bimHex} — flashing firmware only.", Theme.Yellow);
+                // The app is linked at 0x4000 behind an OAD header; without the
+                // BIM at 0x0 nothing boots. Stop instead of flashing a dead image.
+                Log($"\u2717 BIM hex not found: {bimHex}", Theme.Red);
+                Log($"  Build it with {Sck2400BimScript} in sck2400_bim\\, then flash again.", Theme.Yellow);
+                lblFlashStatus.Text = "Flash aborted — BIM hex missing.";
+                SetFirmwareButtons(true);
+                pbFlash.Style = ProgressBarStyle.Continuous;
+                return;
             }
 
             lblFlashStatus.Text = "Flashing...";
@@ -4152,6 +4862,9 @@ Max altitude: {maxAlt:F1}m ASL</description>
             Log("══════════════════════════════════════════════════", Theme.Cyan);
             Log($"  SCK-2400 Local Flash  →  {boardLabel}", Theme.Cyan);
             Log($"  XDS110: {xdsSerial}", Theme.Cyan);
+            Log($"  Hardware: {Sck2400Hardware.Label.Trim()}  (srfprog {Sck2400Hardware.SrfDevice})", Theme.Cyan);
+            if (_lastBuildWasCwTest)
+                Log("  ⚠ CW TEST image (last build): board will transmit a continuous carrier after reset.", Theme.Yellow);
             Log($"  HEX: {flashHex}", Theme.Cyan);
             Log("══════════════════════════════════════════════════", Theme.Cyan);
 
@@ -4159,7 +4872,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
             {
                 // Use -e all to fully erase before programming merged BIM+firmware.
                 // -e pif is NOT used because it would erase BIM pages.
-                string args = $"-t soc(XDS-{xdsSerial}, CC1352P) -e all -p all -v rb -f \"{flashHex}\"";
+                string args = $"-t soc(XDS-{xdsSerial}, {Sck2400Hardware.SrfDevice}) -e all -p all -v rb -f \"{flashHex}\"";
 
                 var psi = new ProcessStartInfo
                 {
@@ -4210,6 +4923,12 @@ Max altitude: {maxAlt:F1}m ASL</description>
             {
                 SetFirmwareButtons(true);
                 pbFlash.Style = ProgressBarStyle.Continuous;
+                // Minimum reset first -- see the large fix note where
+                // pbFlash.Minimum/Maximum are set during an actual flash
+                // (search RunFlashAsync-style code for "BUG FIXED (August
+                // 2026)") for why Value=0 alone is unsafe here across
+                // repeated build/flash runs in the same session.
+                pbFlash.Minimum = 0;
                 pbFlash.Value = 0;
             }
         }
@@ -4411,7 +5130,15 @@ Max altitude: {maxAlt:F1}m ASL</description>
             }
         }
         // Equivalent to PatchBoardHPower() for SCK-915.
-        // Sets: #define TX_POWER BENCH  or  #define TX_POWER FIELD
+        // Rewritten 11/01/26 for the radio.h from the 10/20 Bug A-D fix:
+        //   #define SCK_TXPWR_MODE 0|1        (0 = 0 dBm bench, 1 = +20 dBm field)
+        //   #define RF_SWITCH_SKYA21001 0|1   (from the Hardware selector)
+        // Each patched line is tagged "// GS-PATCH" and inserted just above
+        // radio.h's own "#ifndef" default guard, so radio.h's defaults are
+        // never touched and re-patching never duplicates lines.
+        // The old "#define TX_POWER BENCH|FIELD" line is removed: radio.h now
+        // stops the build with #error if TX_POWER is defined (Bug A: the old
+        // macro always evaluated as FIELD).
         private bool PatchRadioHPower_SCK2400()
         {
             string dir = txtProjectDir.Text.Trim();
@@ -4423,39 +5150,68 @@ Max altitude: {maxAlt:F1}m ASL</description>
             if (radioH == null)
             { Log("radio.h not found in project directory.", Theme.Red); return false; }
 
-            string pwrValue = rbPowerField.Checked ? "FIELD" : "BENCH";
-            string pwrLabel = rbPowerField.Checked ? "+20 dBm field" : "0 dBm bench";
+            var    hw        = Sck2400Hardware;
+            int    pwrMode   = rbPowerField.Checked ? 1 : 0;
+            string pwrLabel  = rbPowerField.Checked ? "+20 dBm field" : "0 dBm bench";
+            int    swValue   = hw.SkyA21001 ? 1 : 0;
+            string swLabel   = hw.SkyA21001 ? "SKYA21001 (SCK-2400 V3)" : "SKY13317 (LaunchPad)";
 
             try
             {
                 string content = File.ReadAllText(radioH);
+                string nl      = content.Contains("\r\n") ? "\r\n" : "\n";
 
-                // Remove any existing TX_POWER override line (prevent duplicates)
-                var cleaned = System.Text.RegularExpressions.Regex.Replace(
+                if (!content.Contains("#ifndef SCK_TXPWR_MODE") ||
+                    !content.Contains("#ifndef RF_SWITCH_SKYA21001"))
+                {
+                    Log("radio.h is the pre-10/20 version (no SCK_TXPWR_MODE / " +
+                        "RF_SWITCH_SKYA21001 guards). Copy in the updated radio.h, radio.c " +
+                        "and main.c first.", Theme.Red);
+                    return false;
+                }
+
+                // Remove earlier GS patch lines and any legacy TX_POWER define.
+                string cleaned = System.Text.RegularExpressions.Regex.Replace(
                     content,
-                    @"[ \t]*#define\s+TX_POWER\s+\w+[^\r\n]*(\r?\n)?",
+                    @"^[ \t]*#define[^\r\n]*//[ \t]*GS-PATCH[^\r\n]*\r?\n",
+                    "",
+                    System.Text.RegularExpressions.RegexOptions.Multiline);
+                cleaned = System.Text.RegularExpressions.Regex.Replace(
+                    cleaned,
+                    @"^[ \t]*#define[ \t]+TX_POWER\b[^\r\n]*\r?\n",
                     "",
                     System.Text.RegularExpressions.RegexOptions.Multiline);
 
-                // Insert before the #ifndef TX_POWER guard
-                string insertLine = $"#define TX_POWER {pwrValue}\r\n";
-                if (cleaned.Contains("#ifndef TX_POWER"))
+                cleaned = InsertBeforeFirst(cleaned, "#ifndef SCK_TXPWR_MODE",
+                    $"#define SCK_TXPWR_MODE {pwrMode}   // GS-PATCH: {pwrLabel}{nl}");
+                cleaned = InsertBeforeFirst(cleaned, "#ifndef RF_SWITCH_SKYA21001",
+                    $"#define RF_SWITCH_SKYA21001 {swValue}   // GS-PATCH: {swLabel}{nl}");
+
+                // CW carrier test (bring-up only). Always written, 0 or 1, so the
+                // state of every build is explicit in radio.h.
+                bool cw = chkCwTest?.Checked == true;
+                if (!cleaned.Contains("#ifndef SCK_RF_CW_TEST"))
                 {
-                    cleaned = cleaned.Replace("#ifndef TX_POWER",
-                        insertLine + "#ifndef TX_POWER");
+                    if (cw)
+                    {
+                        Log("CW test requested but radio.h has no SCK_RF_CW_TEST guard — " +
+                            "update radio.h/radio.c/main.c to the 10/20 versions.", Theme.Red);
+                        return false;
+                    }
                 }
                 else
                 {
-                    // Fallback: append before final #endif
-                    int lastEndif = cleaned.LastIndexOf("#endif");
-                    if (lastEndif >= 0)
-                        cleaned = cleaned.Insert(lastEndif, insertLine);
-                    else
-                        cleaned += "\r\n" + insertLine;
+                    cleaned = InsertBeforeFirst(cleaned, "#ifndef SCK_RF_CW_TEST",
+                        $"#define SCK_RF_CW_TEST {(cw ? 1 : 0)}   // GS-PATCH: {(cw ? "CW CARRIER TEST BUILD" : "normal firmware")}{nl}");
                 }
+                _lastBuildWasCwTest = cw;
 
                 File.WriteAllText(radioH, cleaned);
-                Log($"RF Power: patched radio.h → TX_POWER = {pwrValue} ({pwrLabel})", Theme.Cyan);
+                Log($"RF Power: patched radio.h → SCK_TXPWR_MODE = {pwrMode} ({pwrLabel})", Theme.Cyan);
+                Log($"RF Switch: patched radio.h → RF_SWITCH_SKYA21001 = {swValue} ({swLabel})", Theme.Cyan);
+                if (cw)
+                    Log($"⚠ CW TEST: patched radio.h → SCK_RF_CW_TEST = 1 — this image keys a continuous " +
+                        $"carrier at {pwrLabel}. Rebuild with CW test unchecked before normal use.", Theme.Yellow);
                 return true;
             }
             catch (Exception ex)
@@ -4463,6 +5219,15 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 Log($"Failed to patch radio.h: {ex.Message}", Theme.Red);
                 return false;
             }
+        }
+
+        // Insert text at the start of the line containing the first match.
+        private static string InsertBeforeFirst(string text, string marker, string insert)
+        {
+            int idx = text.IndexOf(marker, StringComparison.Ordinal);
+            if (idx < 0) return text;
+            int lineStart = text.LastIndexOf('\n', Math.Max(0, idx - 1)) + 1;
+            return text.Insert(lineStart, insert);
         }
 
         private void RunClean()
@@ -4562,9 +5327,24 @@ Max altitude: {maxAlt:F1}m ASL</description>
             int totalPages = 0, skipped = 0;
             int firstPage = OpenLstProtocol.FLASH_APP_START / OpenLstProtocol.FLASH_PAGE_SIZE;
             int lastPage  = OpenLstProtocol.FLASH_APP_END   / OpenLstProtocol.FLASH_PAGE_SIZE;
-            // Reset progress bar safely — must set Value to Minimum before
-            // changing Minimum/Maximum or WinForms throws "value cannot be zero"
-            // on the second flash if Value still equals the previous Maximum
+            // Reset progress bar safely across repeated flash runs.
+            //
+            // BUG FIXED (August 2026): the previous ordering here set
+            // Value = 0 BEFORE resetting Minimum. That's only safe on the
+            // very first flash, when Minimum still holds its designer
+            // default of 0. On every subsequent flash, Minimum is still
+            // whatever firstPage was left at from the PREVIOUS run (it was
+            // never reset) -- so Value = 0 was being set below the bar's
+            // own current Minimum, and WinForms throws
+            // ArgumentOutOfRangeException ("Value of '0' is not valid for
+            // 'Value'... should be between minimum and maximum").
+            //
+            // Fixed by resetting Minimum to 0 -- a value that's always
+            // valid regardless of the bar's prior state -- before Value is
+            // ever touched, so every assignment below is guaranteed to
+            // land within whatever range is actually in effect at that
+            // moment.
+            pbFlash.Minimum = 0;
             pbFlash.Value   = 0;
             pbFlash.Minimum = firstPage;
             pbFlash.Maximum = lastPage;
@@ -4807,19 +5587,19 @@ Max altitude: {maxAlt:F1}m ASL</description>
         {
             if (InvokeRequired) { BeginInvoke(new Action(UpdateRfStatusLabel)); return; }
             if (lblRfStatus == null) return;
-            if (_boardType != BoardType.SCK2400 || _physicalBoardApid == 0)
+            if (_boardType != BoardType.SCK2400 || _port == null || !_port.IsOpen)
             {
                 lblRfStatus.Text      = "";
                 lblRfStatus.ForeColor = Theme.Gray;
                 return;
             }
-            // Show which board is the GS and which APIDs get RF-encrypted forwarding
-            string gsBoard  = $"0x{_physicalBoardApid:X3}";
-            string rfTarget = _physicalBoardApid == 0x010 ? "→ 0x011 encrypted" :
-                              _physicalBoardApid == 0x011 ? "→ 0x010 encrypted" :
-                              "→ remote encrypted";
-            lblRfStatus.Text      = $"GS: {gsBoard}  RF {rfTarget}";
-            lblRfStatus.ForeColor = Theme.Cyan;
+            // Show where commands go: the APID box is the destination.
+            // 0x010 = the GS board itself (USB); anything else = relayed over RF.
+            ushort dest = ActiveHwid;
+            lblRfStatus.Text      = dest == 0x010
+                ? "Commands → 0x010 (GS board, USB)"
+                : $"Commands → 0x{dest:X3} (relayed over RF, encrypted)";
+            lblRfStatus.ForeColor = dest == 0x010 ? Theme.Cyan : Theme.Yellow;
         }
 
         // ══════════════════════════════════════════════════════════════════
@@ -5480,6 +6260,52 @@ Max altitude: {maxAlt:F1}m ASL</description>
         }
 
         // ══════════════════════════════════════════════════════════════════
+        //  PYTHON AVAILABILITY CHECK (for tinySA QA integration)
+        // ══════════════════════════════════════════════════════════════════
+        // Checks BOTH that a Python interpreter is on PATH AND that pyserial
+        // is importable -- checking Python alone isn't enough, since a
+        // Python install missing pyserial would still fail the first time
+        // someone actually tries to run a tinySA scan. Tries the Windows
+        // 'py' launcher first (most reliable -- registered even when
+        // 'python' itself isn't on PATH), falls back to 'python'/'python3'.
+        //
+        // IMPORTANT: this method is called BEFORE BuildLogPanel() runs in
+        // the constructor (it has to be, so BuildRfQaTab() can read the
+        // result for the warning banner) -- rtbLog doesn't exist yet at
+        // that point, so this method must NOT call Log() itself. The
+        // result is logged separately, once, right after BuildLogPanel().
+        private void CheckPythonAvailable()
+        {
+            foreach (var exe in new[] { "py", "python", "python3" })
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName               = exe,
+                        Arguments              = "-c \"import serial; print('PYSERIAL_OK')\"",
+                        UseShellExecute        = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError  = true,
+                        CreateNoWindow         = true,
+                    };
+                    using var proc = Process.Start(psi);
+                    if (proc == null) continue;
+                    string stdout = proc.StandardOutput.ReadToEnd();
+                    proc.WaitForExit(5000);
+                    if (proc.ExitCode == 0 && stdout.Contains("PYSERIAL_OK"))
+                    {
+                        _pythonExe       = exe;
+                        _pythonAvailable = true;
+                        return;
+                    }
+                }
+                catch { /* this exe not found or not runnable -- try next */ }
+            }
+            _pythonAvailable = false;
+        }
+
+        // ══════════════════════════════════════════════════════════════════
         //  RF QA TAB
         // ══════════════════════════════════════════════════════════════════
         private void BuildRfQaTab()
@@ -5496,13 +6322,35 @@ Max altitude: {maxAlt:F1}m ASL</description>
             };
             DrawBorder(pnlInfo);
             pnlInfo.Controls.Add(MkLabel(
-                "◈  RF QA Check — Automated spectrum verification using RTL-SDR + rtl_power.",
+                "◈  RF QA Check — Automated spectrum verification via RTL-SDR or tinySA.",
                 8, 6, 700, Theme.Green, Theme.FontMonoBold));
             pnlInfo.Controls.Add(MkLabel(
-                "Connect board under test via USB-Serial. NESDR antenna 6-12\" from board. QA uses HWID 0xFFFF to force RF relay TX.",
+                $"DIRECT-CONNECT ONLY (no antenna) — {ATTENUATOR_DB}dB attenuator required between board RF out and instrument. " +
+                $"QA uses HWID 0x{QA_TRIGGER_HWID:X4} to force RF relay TX.",
                 8, 24, 700, Theme.Gray, Theme.FontSmall));
             p.Controls.Add(pnlInfo);
             row += 68;
+
+            // ── Python availability warning (tinySA path only) ─────────
+            // Only shown when Python/pyserial isn't available. Large and
+            // impossible to miss, per requirement -- controls that need
+            // Python are also disabled below rather than left to error.
+            pnlPythonWarning = new Panel
+            {
+                Location  = new Point(lx, row),
+                Size      = new Size(720, 44),
+                BackColor = Color.FromArgb(48, 20, 8),
+                Visible   = !_pythonAvailable,
+            };
+            DrawBorder(pnlPythonWarning);
+            pnlPythonWarning.Controls.Add(MkLabel(
+                "⚠  PYTHON NOT FOUND — tinySA QA scanning is unavailable.",
+                8, 4, 700, Theme.Yellow, Theme.FontMonoBold));
+            pnlPythonWarning.Controls.Add(MkLabel(
+                "Install Python 3.9+ from python.org (check \"Add to PATH\"), then run: py -m pip install pyserial",
+                8, 22, 700, Theme.Gray, Theme.FontSmall));
+            p.Controls.Add(pnlPythonWarning);
+            if (!_pythonAvailable) row += 52;
 
             // ── rtl_power path ─────────────────────────────────────────
             p.Controls.Add(MkSectionLabel("── rtl_power Location", lx, row)); row += 28;
@@ -5600,6 +6448,95 @@ Max altitude: {maxAlt:F1}m ASL</description>
             p.Controls.AddRange(new Control[] { txtQaSerial, cmbQaBoardType, cmbQaDongleIndex, lblDongleHint });
             row += 40;
 
+            // ── Instrument selector ─────────────────────────────────────
+            // SCK-2400 (2440MHz) is physically above the RTL-SDR/NESDR
+            // Smart dongle's ~1750MHz tuning range -- forced to tinySA
+            // automatically below rather than left as a user error to hit.
+            p.Controls.Add(MkLabel("Instrument:", lx, row + 3, 76, Theme.Gray));
+            cmbQaInstrument = new ComboBox
+            {
+                Location      = new Point(lx + 82, row),
+                Size          = new Size(120, 26),
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.White,
+                Font          = Theme.FontMono,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+            };
+            cmbQaInstrument.Items.AddRange(new object[] { "RTL-SDR", "tinySA" });
+            cmbQaInstrument.SelectedIndex = 0;
+
+            p.Controls.Add(MkLabel("tinySA Port:", lx + 220, row + 3, 84, Theme.Gray));
+            cmbTinySaPort = new ComboBox
+            {
+                Location      = new Point(lx + 306, row),
+                Size          = new Size(100, 26),
+                BackColor     = Theme.PanelBack,
+                ForeColor     = Theme.White,
+                Font          = Theme.FontMono,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Visible       = false,
+            };
+            foreach (var pt in SerialPort.GetPortNames().OrderBy(x => x))
+                cmbTinySaPort.Items.Add(pt);
+            if (cmbTinySaPort.Items.Count > 0) cmbTinySaPort.SelectedIndex = 0;
+
+            var lblTinySaHint = MkLabel(
+                $"(separate device from the board's own connection above — direct-connect with {ATTENUATOR_DB}dB attenuator, no antenna)",
+                lx + 414, row + 5, 300, Theme.Gray, Theme.FontSmall);
+            lblTinySaHint.Visible = false;
+
+            // Show/hide the RTL-SDR dongle index vs the tinySA port picker
+            // based on which instrument is selected.
+            cmbQaInstrument.SelectedIndexChanged += (s, e) =>
+            {
+                bool useTinySa = cmbQaInstrument.SelectedItem?.ToString() == "tinySA";
+                cmbQaDongleIndex.Visible = !useTinySa;
+                lblDongleHint.Visible    = !useTinySa;
+                cmbTinySaPort.Visible    = useTinySa;
+                lblTinySaHint.Visible    = useTinySa;
+            };
+
+            // SCK-2400 physically cannot be measured with RTL-SDR -- force
+            // and lock the instrument selector to tinySA when selected.
+            cmbQaBoardType.SelectedIndexChanged += (s, e) =>
+            {
+                bool isSck2400 = cmbQaBoardType.SelectedItem?.ToString() == "SCK-2400";
+                if (isSck2400 && cmbQaInstrument.SelectedItem?.ToString() != "tinySA")
+                {
+                    cmbQaInstrument.SelectedItem = "tinySA";
+                    Log("SCK-2400 (2440MHz) is above RTL-SDR's tuning range — instrument set to tinySA.",
+                        Theme.Yellow);
+                }
+                cmbQaInstrument.Enabled = !isSck2400;  // locked to tinySA for SCK-2400
+            };
+
+            p.Controls.AddRange(new Control[] { cmbQaInstrument, cmbTinySaPort, lblTinySaHint });
+            row += 40;
+
+            // ── Attenuator confirmation ──────────────────────────────────
+            // Deliberately unchecked by default. Added after repeatedly
+            // getting caught out on the bench: the software has no way to
+            // know whether the ATTENUATOR_DB pad is physically in the
+            // signal path or not, and blindly applying the +30dB
+            // correction to an antenna-connected or bare-cable test
+            // produces a confident-looking but completely fabricated
+            // "calibrated" number. Happened three separate times in one
+            // session before this checkbox existed. Now the tool's
+            // confidence in a number always matches what the operator
+            // actually confirmed about the physical setup, instead of a
+            // standing assumption that can silently go stale.
+            chkAttenuatorConfirmed = new CheckBox
+            {
+                Location  = new Point(lx, row),
+                Size      = new Size(520, 24),
+                ForeColor = Theme.Yellow,
+                Font      = Theme.FontSmall,
+                Text      = $"{ATTENUATOR_DB}dB attenuator CONFIRMED connected (direct-connect only, no antenna)",
+                Checked   = true,
+            };
+            p.Controls.Add(chkAttenuatorConfirmed);
+            row += 32;
+
             // ── PPM correction ──────────────────────────────────────────
             p.Controls.Add(MkLabel("PPM Correction:", lx, row + 3, 110, Theme.Gray));
             var txtQaPpm = new TextBox
@@ -5630,11 +6567,15 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 else
                     txtQaPpm.ForeColor = Theme.Red;
             };
+            txtQaPpm.Enabled = false;  // auto-correction removed -- see note below
 
-            p.Controls.Add(MkLabel("auto = calculated each scan from board reference.  Type value to override.",
-                lx + 200, row + 5, 390, Theme.Gray, Theme.FontSmall));
+            p.Controls.Add(MkLabel(
+                "PPM auto-correction removed — it was silently masking bad measurements " +
+                "(a real miss showed up as a false PASS). Raw peak frequency only, below.",
+                lx + 200, row + 5, 470, Theme.Yellow, Theme.FontSmall));
 
             var btnResetPpm = MkButton("↺ Auto", lx + 596, row, 60, Theme.Gray, Theme.PanelBack);
+            btnResetPpm.Enabled = false;
             btnResetPpm.Click += (s, e) =>
             {
                 _qaManualPpm       = false;
@@ -5644,6 +6585,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
             };
 
             var btnLockPpm = MkButton("🔒 Lock PPM", lx + 664, row, 110, Theme.Cyan, Theme.PanelBack);
+            btnLockPpm.Enabled = false;
             btnLockPpm.Click += (s, e) =>
             {
                 if (_qaRawPpm == 0)
@@ -5695,6 +6637,22 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 lx + 638, row + 5, 240, Theme.Gray, Theme.FontSmall);
 
             p.Controls.AddRange(new Control[] { btnRunQa, btnQaSave, btnQaPrint, btnQaBrowseSnap, lblQaStatus });
+            row += 44;
+
+            // ── Board QA Wizard ───────────────────────────────────────────
+            btnStartWizard = MkButton("▶ Start Board QA Process", lx, row, 260, Theme.Green, Color.FromArgb(16, 48, 16));
+            btnStartWizard.Click += async (s, e) => await RunBoardQaWizardAsync();
+
+            btnCancelWizard = MkButton("⛔ Cancel", lx + 272, row, 110, Theme.Red, Theme.PanelBack);
+            btnCancelWizard.Visible = false;
+            btnCancelWizard.Enabled = false;
+            btnCancelWizard.Click += (s, e) =>
+            {
+                _wizardCts?.Cancel();
+                Log("QA WIZARD: cancel requested — will stop after the current step.", Theme.Yellow);
+            };
+
+            p.Controls.AddRange(new Control[] { btnStartWizard, btnCancelWizard });
             row += 44;
 
             // ── Results panel ───────────────────────────────────────────
@@ -5834,9 +6792,647 @@ Max altitude: {maxAlt:F1}m ASL</description>
         }
 
         // ── Run RF QA scan ──────────────────────────────────────────────
+        // ── Peak detection helper (used by RunRfQaAsync's retry loop AND
+        // final result, AND by the QA Wizard's antenna/attenuator steps,
+        // so every code path agrees on what counts as a real signal) ────
+        // See QA_PROMINENCE_DB in the constants block near the top of this
+        // file for why this exists and how the threshold was chosen.
+        // ── Bin-snapping for cross-attempt accumulation ──────────────────
+        // Real bug found and fixed: merging attempts via
+        // Math.Round(freq, 3) (nearest 1kHz) used a rounding grid far
+        // finer than the actual bin spacing (~69kHz at 290 points across
+        // 20MHz). Each scan attempt is a fresh Python process / fresh USB
+        // session, and small attempt-to-attempt frequency jitter from the
+        // tinySA meant the SAME real bin could round to two different
+        // 1kHz-multiple keys depending on which attempt returned it --
+        // splitting one real signal's power across two accumulator
+        // entries instead of merging into one. Confirmed on a real saved
+        // snapshot: 573 accumulated points where there should have been
+        // 290, almost exactly 2x, with prominence crushed from ~75dB
+        // (manual GUI, same signal, same moment) down to ~2dB (automated,
+        // fragmented). Root cause of most of one day's worth of spurious
+        // automated "no signal" results -- not board flakiness at all.
+        //
+        // Fix: snap every returned frequency to its nearest INTENDED bin
+        // center (one of exactly `points` bins spanning the known sweep
+        // range), so attempt-to-attempt jitter can never split a real
+        // bin across two keys -- everything near one bin center always
+        // collapses to that same center, by construction.
+        private static double SnapToBinCenter(double freqMHz, double sweepStartMHz, double sweepEndMHz, int points)
+        {
+            double stepMHz = (sweepEndMHz - sweepStartMHz) / (points - 1);
+            int binIndex = (int)Math.Round((freqMHz - sweepStartMHz) / stepMHz);
+            binIndex = Math.Max(0, Math.Min(points - 1, binIndex));
+            return sweepStartMHz + binIndex * stepMHz;
+        }
+
+        private (double PeakFreq, double PeakDbm, bool SignalDetected,
+                 double ProminenceDb, double NoiseFloorDbm) DetectPeak(
+            List<(double FreqMHz, double Dbm)> data, double centerMHz)
+        {
+            // Search window narrowed from an earlier ±8MHz to ±200kHz.
+            // ±8MHz was leftover slack for the PPM auto-correction
+            // logic removed earlier -- with no correction happening,
+            // there's no reason to accept anything more than tens of
+            // kHz off a crystal-controlled transmitter's expected
+            // frequency. Confirmed via 11 real bench runs: every
+            // genuine carrier landed within 600kHz of centerMHz;
+            // every other "signal" (real RF, just not the one we
+            // want -- tinySA internal artifacts, PLL settling, etc.)
+            // landed multiple MHz away. This window excludes those
+            // automatically instead of relying on the prominence
+            // check alone to guess which peak is the real one.
+            var candidateWindow = data.Where(x => Math.Abs(x.FreqMHz - centerMHz) <= 0.2).ToList();
+            if (candidateWindow.Count == 0) candidateWindow = data;
+            var highest = candidateWindow.OrderByDescending(x => x.Dbm).First();
+
+            // ── Noise floor from a WIDE sample, NOT the narrow
+            // candidate window above ──────────────────────────────
+            // Real bug found and fixed after the ±200kHz window was
+            // introduced: at ~69kHz/bin that window is only ~5-7
+            // bins wide. A real transmitted signal has genuine
+            // occupied bandwidth (modulation sidebands), so several
+            // of those few bins are legitimately PART of the signal,
+            // not background -- computing the "noise floor" as the
+            // median of a window that's mostly signal crushed the
+            // prominence number toward zero even for a clearly
+            // strong, real transmission (confirmed on the bench:
+            // multiple runs showed peak and "noise floor" locked
+            // within 1-3.5dB of each other, never separating, on
+            // signals later shown to be real). Fixed by sampling
+            // the noise floor from the full swept data, excluding a
+            // guard band around the candidate peak so the signal
+            // can't bias its own baseline.
+            var noiseSample = data
+                .Where(x => Math.Abs(x.FreqMHz - highest.FreqMHz) > 0.5)
+                .ToList();
+            if (noiseSample.Count == 0) noiseSample = data; // shouldn't happen given a 20MHz sweep
+
+            var sortedDbm = noiseSample.Select(x => x.Dbm).OrderBy(x => x).ToList();
+            double noiseFloor = sortedDbm[sortedDbm.Count / 2]; // median
+
+            double prominence = highest.Dbm - noiseFloor;
+            bool detected = prominence >= QA_PROMINENCE_DB;
+
+            double pFreq = highest.FreqMHz, pDbm = highest.Dbm;
+            if (detected)
+            {
+                // Genuine second FSK tone must ALSO clear the prominence
+                // bar on its own merit -- not just be "next highest in a
+                // list." Searches the FULL data set near the highest bin
+                // (not the narrow candidate window), since a real second
+                // tone up to 1MHz away could fall outside ±200kHz of
+                // centerMHz.
+                var second = data
+                    .Where(x => Math.Abs(x.FreqMHz - highest.FreqMHz) > 0.05 &&
+                                Math.Abs(x.FreqMHz - highest.FreqMHz) < 1.0 &&
+                                (x.Dbm - noiseFloor) >= QA_PROMINENCE_DB)
+                    .OrderByDescending(x => x.Dbm)
+                    .FirstOrDefault();
+                if (second != default)
+                {
+                    pFreq = (highest.FreqMHz + second.FreqMHz) / 2.0;
+                    pDbm  = Math.Max(highest.Dbm, second.Dbm);
+                }
+            }
+            return (pFreq, pDbm, detected, prominence, noiseFloor);
+        }
+
+        // ══════════════════════════════════════════════════════════════════
+        //  BOARD QA WIZARD
+        // ══════════════════════════════════════════════════════════════════
+        // Guided 3-step process for QA'ing a freshly-built board:
+        //   1. UART sanity check (get_telem) -- halts on no reply
+        //   2. Antenna test (frequency/presence, uncalibrated) -- halts if
+        //      no signal detected
+        //   3. Attenuator test (calibrated power vs. QA_MIN/MAX_POWER_DBM)
+        // Ends with a printable HTML summary covering all three steps.
+        //
+        // Design decisions (per project discussion, August 2026):
+        //   - Any hard failure halts the wizard and prompts to check the
+        //     board setup -- none of these three checks are considered
+        //     "out of scope" for board performance.
+        //   - Step 1's reset-counter/safe-mode check is a YELLOW FLAG, not
+        //     a failure -- the board responding is what matters for the
+        //     halt decision; abnormal history just gets flagged for review.
+        //   - Step 2 (antenna) is never calibrated -- the attenuator
+        //     confirmation checkbox is forced OFF for that step regardless
+        //     of its prior state, and forced ON for Step 3, so there's no
+        //     chance of the wrong calibration state leaking from manual
+        //     use of the single "Run QA Check" button into the wizard.
+
+        private class WizardScanOutcome
+        {
+            public bool   Success;
+            public string ErrorMessage = "";
+            public List<(double FreqMHz, double Dbm)> FundData = new();
+            public double PeakFreq;
+            public double PeakDbm;          // includes +ATTENUATOR_DB if useAttenuator was true
+            public bool   SignalDetected;
+            public double ProminenceDb;
+            public double NoiseFloorDbm;
+        }
+
+        // Runs the same trigger-loop + 20-attempt Max-Hold-accumulate +
+        // DetectPeak process as RunRfQaAsync's tinySA path, as a reusable,
+        // UI-panel-independent helper the wizard can call twice (once per
+        // RF step) without duplicating that logic a second time.
+        private async Task<WizardScanOutcome> RunWizardTinySaScanOnce(double centerMHz, bool useAttenuator, string snapBaseName)
+        {
+            var outcome = new WizardScanOutcome();
+
+            if (!_pythonAvailable)
+            { outcome.ErrorMessage = "Python/pyserial not available -- see warning banner above."; return outcome; }
+            if (cmbTinySaPort.SelectedItem == null)
+            { outcome.ErrorMessage = "No tinySA COM port selected."; return outcome; }
+
+            double sweepStartMHz = Math.Max(centerMHz - 10, 50);
+            double sweepEndMHz   = centerMHz + 10;
+            const int tinySaPoints = 290;
+
+            var txCts = new CancellationTokenSource();
+            _ = Task.Run(async () =>
+            {
+                while (!txCts.Token.IsCancellationRequested)
+                {
+                    try
+                    {
+                        if (_port?.IsOpen == true)
+                        {
+                            ushort seq = IncSeqNum();
+                            WritePacket(OpenLstProtocol.BuildSimpleCommand(QA_TRIGGER_HWID, seq, "get_telem"));
+                        }
+                    }
+                    catch { }
+                    await Task.Delay(800, txCts.Token).ContinueWith(_ => { });
+                }
+            }, txCts.Token);
+
+            var accumulated = new Dictionary<double, double>();
+            for (int attempt = 1; attempt <= QA_MAX_TX_ATTEMPTS; attempt++)
+            {
+                if (_wizardCts?.IsCancellationRequested == true) break;
+
+                string attemptFile = Path.Combine(QaTempFolder, $"{snapBaseName}_attempt{attempt:D2}.csv");
+                bool attemptOk = await RunTinySaScan(
+                    cmbTinySaPort.SelectedItem!.ToString()!,
+                    sweepStartMHz * 1_000_000.0,
+                    sweepEndMHz   * 1_000_000.0,
+                    tinySaPoints,
+                    attemptFile);
+
+                if (attemptOk && File.Exists(attemptFile) && new FileInfo(attemptFile).Length > 50)
+                {
+                    var attemptData = ParseRtlPowerCsv(attemptFile);
+                    foreach (var (freq, dbm) in attemptData)
+                    {
+                        double key = SnapToBinCenter(freq, sweepStartMHz, sweepEndMHz, tinySaPoints);
+                        if (!accumulated.TryGetValue(key, out double existing) || dbm > existing)
+                            accumulated[key] = dbm;
+                    }
+                }
+                try { File.Delete(attemptFile); } catch { }
+            }
+            txCts.Cancel();
+
+            outcome.FundData = accumulated
+                .Select(kv => (FreqMHz: kv.Key, Dbm: kv.Value))
+                .OrderBy(x => x.FreqMHz).ToList();
+
+            if (outcome.FundData.Count == 0)
+            { outcome.ErrorMessage = "No data returned from any scan attempt."; return outcome; }
+
+            var result = DetectPeak(outcome.FundData, centerMHz);
+            outcome.PeakFreq       = result.PeakFreq;
+            outcome.PeakDbm        = useAttenuator ? result.PeakDbm + ATTENUATOR_DB : result.PeakDbm;
+            outcome.SignalDetected = result.SignalDetected;
+            outcome.ProminenceDb   = result.ProminenceDb;
+            outcome.NoiseFloorDbm  = result.NoiseFloorDbm;
+            outcome.Success        = true;
+
+            try
+            {
+                Directory.CreateDirectory(QaSnapshotFolder);
+                string snapDest = Path.Combine(QaSnapshotFolder, $"{snapBaseName}_fund.csv");
+                double hzStep = (sweepEndMHz - sweepStartMHz) * 1_000_000.0 / (outcome.FundData.Count - 1);
+                string nowStr = DateTime.Now.ToString("yyyy-MM-dd, HH:mm:ss");
+                string dbmValues = string.Join(",", outcome.FundData.Select(x => x.Dbm.ToString("F2")));
+                File.WriteAllText(snapDest,
+                    $"{nowStr},{(long)(sweepStartMHz * 1_000_000)},{(long)(sweepEndMHz * 1_000_000)}," +
+                    $"{hzStep:F6},{outcome.FundData.Count},{dbmValues}\n");
+                Log($"QA WIZARD: snapshot saved → QA_Snapshots\\{snapBaseName}_fund.csv", Theme.Gray);
+            }
+            catch { /* snapshot save failure shouldn't abort the wizard */ }
+
+            return outcome;
+        }
+
+        // ── Auto-retry on mid-scan reboot ───────────────────────────────
+        // Per project discussion: SCK-915's AUTO_REBOOT_SECONDS (10 min
+        // dead-man's-switch, board_defaults.h) is deliberate, flight-
+        // critical behavior, not a fault -- but it can land mid-scan and
+        // produce a spurious "no signal" or garbage reading if it happens
+        // to hit during the ~60-70s a wizard scan phase takes. If
+        // _wizardBootloaderSeen got set during a scan attempt (see that
+        // field's own comment), treat it as "board rebooted mid-test,"
+        // not a real failure -- discard that attempt's result and retry
+        // the whole scan phase fresh, up to WIZARD_REBOOT_RETRY_LIMIT
+        // times, rather than reporting a false FAIL on an otherwise
+        // healthy board.
+        private const int WIZARD_REBOOT_RETRY_LIMIT = 2;
+
+        private async Task<WizardScanOutcome> RunWizardTinySaScan(double centerMHz, bool useAttenuator, string snapBaseName)
+        {
+            WizardScanOutcome outcome;
+            for (int rebootRetry = 0; ; rebootRetry++)
+            {
+                _wizardBootloaderSeen = false;
+                outcome = await RunWizardTinySaScanOnce(centerMHz, useAttenuator, snapBaseName);
+
+                if (!_wizardBootloaderSeen)
+                    return outcome;  // clean run, no reboot seen -- real result
+
+                if (rebootRetry >= WIZARD_REBOOT_RETRY_LIMIT)
+                {
+                    Log($"QA WIZARD: board rebooted mid-scan again after {WIZARD_REBOOT_RETRY_LIMIT} " +
+                        "retries -- returning last result as-is rather than retrying indefinitely.",
+                        Theme.Yellow);
+                    return outcome;
+                }
+
+                Log("QA WIZARD: board rebooted mid-scan (AUTO_REBOOT_SECONDS dead-man's-switch, " +
+                    "not a fault) — discarding this attempt and retrying the scan phase fresh.",
+                    Theme.Yellow);
+            }
+        }
+
+        // Minimal self-contained input dialog -- avoids taking a dependency
+        // on Microsoft.VisualBasic.Interaction.InputBox just for this.
+        private static string? PromptForText(string title, string message, string defaultValue = "")
+        {
+            using var dlg = new Form
+            {
+                Text            = title,
+                StartPosition   = FormStartPosition.CenterScreen,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MinimizeBox     = false,
+                MaximizeBox     = false,
+                Width           = 420,
+                Height          = 160,
+                BackColor       = Theme.PanelBack,
+            };
+            var lbl = new Label { Left = 16, Top = 16, Width = 380, Text = message, ForeColor = Theme.White };
+            var txt = new TextBox { Left = 16, Top = 44, Width = 380, Text = defaultValue };
+            var btnOk = MkButton("OK", 220, 78, 80, Theme.Green, Theme.PanelBack);
+            btnOk.DialogResult = DialogResult.OK;
+            var btnCancel = MkButton("Cancel", 310, 78, 80, Theme.Red, Theme.PanelBack);
+            btnCancel.DialogResult = DialogResult.Cancel;
+            dlg.Controls.AddRange(new Control[] { lbl, txt, btnOk, btnCancel });
+            dlg.AcceptButton = btnOk;
+            dlg.CancelButton = btnCancel;
+            return dlg.ShowDialog() == DialogResult.OK ? txt.Text.Trim() : null;
+        }
+
+        // Themed confirm dialog (OK/Cancel), replacing MessageBox.Show for
+        // the wizard's step prompts -- native MessageBox can't be recolored
+        // in classic WinForms and renders unreadably against this app's
+        // dark theme on systems with Windows dark mode enabled.
+        private static bool PromptConfirm(string title, string message)
+        {
+            using var dlg = new Form
+            {
+                Text            = title,
+                StartPosition   = FormStartPosition.CenterScreen,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MinimizeBox     = false,
+                MaximizeBox     = false,
+                Width           = 480,
+                Height          = 220,
+                BackColor       = Theme.PanelBack,
+            };
+            var lbl = new Label
+            {
+                Left      = 16, Top = 16, Width = 440, Height = 120,
+                Text      = message,
+                ForeColor = Theme.White,
+                Font      = Theme.FontMono,
+            };
+            var btnOk     = MkButton("OK", 280, 148, 80, Theme.Green, Theme.PanelBack);
+            btnOk.DialogResult = DialogResult.OK;
+            var btnCancel = MkButton("Cancel", 370, 148, 80, Theme.Red, Theme.PanelBack);
+            btnCancel.DialogResult = DialogResult.Cancel;
+            dlg.Controls.AddRange(new Control[] { lbl, btnOk, btnCancel });
+            dlg.AcceptButton = btnOk;
+            dlg.CancelButton = btnCancel;
+            return dlg.ShowDialog() == DialogResult.OK;
+        }
+
+        private async Task RunBoardQaWizardAsync()
+        {
+            if (!CheckConnected())
+            { Log("QA WIZARD: connect to a board first.", Theme.Yellow); return; }
+
+            string? serial = PromptForText("Board QA Process",
+                "Enter board serial number:", txtQaSerial.Text.Trim());
+            if (string.IsNullOrWhiteSpace(serial))
+            { Log("QA WIZARD: cancelled -- no serial number entered.", Theme.Yellow); return; }
+            txtQaSerial.Text = serial;
+
+            string boardType = cmbQaBoardType.SelectedItem?.ToString() ?? "SCK-915";
+            double centerMHz = boardType == "SCK-2400" ? 2440.0 : 915.0;
+
+            _wizardCts = new CancellationTokenSource();
+            btnStartWizard.Enabled  = false;
+            btnCancelWizard.Visible = true;
+            btnCancelWizard.Enabled = true;
+            btnRunQa.Enabled        = false;
+
+            Log($"═══ QA WIZARD started — serial {serial} ({boardType}) ═══", Theme.Cyan);
+
+            bool wizardAborted    = false;
+            bool step1Ok          = false;
+            bool step1YellowFlag  = false;
+            string step1Note      = "";
+            WizardScanOutcome? step2 = null;
+            WizardScanOutcome? step3 = null;
+
+            try
+            {
+                // ── STEP 1: UART sanity check ──────────────────────────
+                Log("QA WIZARD — Step 1/3: UART sanity check (get_telem)...", Theme.Cyan);
+                step1Ok = await SendGetTelemAsync();
+                if (!step1Ok)
+                {
+                    Log("QA WIZARD: Step 1 FAILED — no telem reply. Halting — " +
+                        "check board power/connection before continuing.", Theme.Red);
+                    wizardAborted = true;
+                }
+                else
+                {
+                    step1YellowFlag = lblResetCounter.ForeColor == Theme.Yellow ||
+                                       lblResetCounter.ForeColor == Theme.Red   ||
+                                       lblSafeMode.Text == "SAFE MODE";
+                    step1Note = $"Reset Counter: {lblResetCounter.Text}, Safe Mode: {lblSafeMode.Text}" +
+                                (step1YellowFlag ? "  ⚠ abnormal history — worth a manual look" : "");
+                    Log($"QA WIZARD: Step 1 PASS{(step1YellowFlag ? " (yellow flag)" : "")} — {step1Note}",
+                        step1YellowFlag ? Theme.Yellow : Theme.Green);
+
+                    // ── Power-mode verification (Custom0) ────────────────
+                    // Not treated as a hard failure -- boards still running
+                    // firmware from before this telemetry field existed
+                    // will always report 0 (telemetry_init()'s zero-fill,
+                    // never written), which is indistinguishable from a
+                    // genuine "Bench" report. Only meaningful once a board
+                    // is confirmed running updated firmware. Flagged as a
+                    // yellow flag, same tier as the reset-counter check
+                    // above, not folded into step1YellowFlag itself so the
+                    // two stay individually visible in the log/report.
+                    if (_lastOpenLstTelem != null)
+                    {
+                        bool boardReportsField = _lastOpenLstTelem.Custom0 != 0;
+                        bool uiSaysField       = rbPowerField.Checked;
+                        if (boardReportsField != uiSaysField)
+                        {
+                            step1Note += $"  ⚠ POWER MODE MISMATCH — board reports " +
+                                $"{(boardReportsField ? "Field" : "Bench")} (Custom0={_lastOpenLstTelem.Custom0}), " +
+                                $"UI assumes {(uiSaysField ? "Field" : "Bench")}. If this board is running firmware " +
+                                $"from before this telemetry field existed, Custom0 will always read 0 and this " +
+                                $"warning isn't meaningful yet.";
+                            Log($"QA WIZARD: ⚠ power mode mismatch — board reports " +
+                                $"{(boardReportsField ? "Field" : "Bench")} (Custom0={_lastOpenLstTelem.Custom0}), " +
+                                $"UI assumes {(uiSaysField ? "Field" : "Bench")}.", Theme.Yellow);
+                        }
+                        else
+                        {
+                            Log($"QA WIZARD: power mode confirmed from telemetry — " +
+                                $"board reports {(boardReportsField ? "Field" : "Bench")} " +
+                                $"(Custom0={_lastOpenLstTelem.Custom0}), matches UI.", Theme.Green);
+                        }
+                    }
+                    else
+                    {
+                        Log("QA WIZARD: power-mode verification unavailable -- no telemetry parsed this run.",
+                            Theme.Gray);
+                    }
+                }
+
+                // ── STEP 2: Antenna test ────────────────────────────────
+                if (!wizardAborted && _wizardCts?.IsCancellationRequested != true)
+                {
+                    bool confirmAntenna = PromptConfirm(
+                        "QA WIZARD — Step 2/3: Antenna Test",
+                        "Connect ANTENNAS to both the ground station and remote boards.\n\n" +
+                        "Click OK when ready to run the antenna scan (frequency + signal presence check, not calibrated for power).");
+
+                    if (!confirmAntenna)
+                    { Log("QA WIZARD: cancelled at Step 2 prompt.", Theme.Yellow); wizardAborted = true; }
+                    else
+                    {
+                        chkAttenuatorConfirmed.Checked = false;  // forced -- antenna step is never calibrated
+                        _qaSnapCount++;
+                        string snapBase = $"{boardType.Replace("-", "")}_{serial}_wiz{_qaSnapCount:D3}_ant";
+                        Log($"QA WIZARD: running antenna scan (up to {QA_MAX_TX_ATTEMPTS} attempts)...", Theme.Gray);
+                        step2 = await RunWizardTinySaScan(centerMHz, useAttenuator: false, snapBase);
+
+                        if (!step2.Success)
+                        {
+                            Log($"QA WIZARD: Step 2 FAILED — {step2.ErrorMessage}", Theme.Red);
+                            wizardAborted = true;
+                        }
+                        else if (!step2.SignalDetected)
+                        {
+                            Log($"QA WIZARD: Step 2 FAILED — no signal detected " +
+                                $"({step2.ProminenceDb:F1}dB above noise, need {QA_PROMINENCE_DB:F0}dB). " +
+                                $"Halting — check board TX / antenna connection before continuing.", Theme.Red);
+                            wizardAborted = true;
+                        }
+                        else
+                        {
+                            double freqErrKHz = (step2.PeakFreq - centerMHz) * 1000.0;
+                            Log($"QA WIZARD: Step 2 PASS — {step2.PeakFreq:F3} MHz ({freqErrKHz:+0.0;-0.0} kHz), " +
+                                $"{step2.ProminenceDb:F1}dB above noise", Theme.Green);
+                        }
+                    }
+                }
+
+                // ── STEP 3: Attenuator test ─────────────────────────────
+                if (!wizardAborted && _wizardCts?.IsCancellationRequested != true)
+                {
+                    bool confirmAtten = PromptConfirm(
+                        "QA WIZARD — Step 3/3: Attenuator Test",
+                        $"Remove antennas. Connect the board's RF output DIRECTLY to the tinySA " +
+                        $"through the {ATTENUATOR_DB}dB attenuator (no antennas).\n\n" +
+                        "Click OK when ready to run the calibrated power scan.");
+
+                    if (!confirmAtten)
+                    { Log("QA WIZARD: cancelled at Step 3 prompt.", Theme.Yellow); wizardAborted = true; }
+                    else
+                    {
+                        chkAttenuatorConfirmed.Checked = true;  // forced -- attenuator step is always calibrated
+                        string snapBase = $"{boardType.Replace("-", "")}_{serial}_wiz{_qaSnapCount:D3}_att";
+                        Log($"QA WIZARD: running attenuator scan (up to {QA_MAX_TX_ATTEMPTS} attempts)...", Theme.Gray);
+                        step3 = await RunWizardTinySaScan(centerMHz, useAttenuator: true, snapBase);
+
+                        if (!step3.Success)
+                        {
+                            Log($"QA WIZARD: Step 3 FAILED — {step3.ErrorMessage}", Theme.Red);
+                            wizardAborted = true;
+                        }
+                        else if (!step3.SignalDetected)
+                        {
+                            Log($"QA WIZARD: Step 3 FAILED — no signal detected " +
+                                $"({step3.ProminenceDb:F1}dB above noise, need {QA_PROMINENCE_DB:F0}dB). " +
+                                $"Check attenuator/cable connection before continuing.", Theme.Red);
+                            wizardAborted = true;
+                        }
+                        else
+                        {
+                            bool   isFieldMode = rbPowerField.Checked;
+                            double powerFloor  = isFieldMode ? QA_MIN_POWER_DBM_FIELD : QA_MIN_POWER_DBM_BENCH;
+                            double powerCeil   = isFieldMode ? QA_MAX_POWER_DBM_FIELD : QA_MAX_POWER_DBM_BENCH;
+                            string modeLabel   = isFieldMode ? "Max/Field (~28dBm target)" : "0dBm/Bench (~18dBm target)";
+                            bool powerOk = step3.PeakDbm >= powerFloor && step3.PeakDbm <= powerCeil;
+                            double freqErrKHz = (step3.PeakFreq - centerMHz) * 1000.0;
+                            Log($"QA WIZARD: Step 3 {(powerOk ? "PASS" : "FAIL")} — {step3.PeakFreq:F3} MHz " +
+                                $"({freqErrKHz:+0.0;-0.0} kHz), {step3.PeakDbm:F1} dBm calibrated — " +
+                                $"graded against {modeLabel} (floor {powerFloor:F0}dBm, ceiling {powerCeil:F0}dBm — PROVISIONAL)",
+                                powerOk ? Theme.Green : Theme.Red);
+                            if (!powerOk) wizardAborted = true;
+                        }
+                    }
+                }
+
+                if (_wizardCts?.IsCancellationRequested == true)
+                {
+                    Log("QA WIZARD: cancelled by user.", Theme.Yellow);
+                    wizardAborted = true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"QA WIZARD error: {ex.Message}", Theme.Red);
+                wizardAborted = true;
+            }
+            finally
+            {
+                btnStartWizard.Enabled  = true;
+                btnCancelWizard.Visible = false;
+                btnCancelWizard.Enabled = false;
+                btnRunQa.Enabled        = true;
+                _wizardCts?.Dispose();
+                _wizardCts = null;
+            }
+
+            // ── Final summary — printable HTML, same pattern as
+            // PrintQaSummary() for the single-run flow ────────────────────
+            bool   isFieldModeFinal = rbPowerField.Checked;
+            double powerFloorFinal  = isFieldModeFinal ? QA_MIN_POWER_DBM_FIELD : QA_MIN_POWER_DBM_BENCH;
+            double powerCeilFinal   = isFieldModeFinal ? QA_MAX_POWER_DBM_FIELD : QA_MAX_POWER_DBM_BENCH;
+            string modeLabelFinal   = isFieldModeFinal ? "Max/Field (~28dBm target)" : "0dBm/Bench (~18dBm target)";
+
+            bool overallPass = !wizardAborted && step1Ok &&
+                                step2 != null && step2.SignalDetected &&
+                                step3 != null && step3.SignalDetected &&
+                                step3.PeakDbm >= powerFloorFinal && step3.PeakDbm <= powerCeilFinal;
+
+            string html = BuildWizardSummaryHtml(serial, boardType, centerMHz,
+                step1Ok, step1YellowFlag, step1Note, step2, step3, overallPass,
+                powerFloorFinal, powerCeilFinal, modeLabelFinal);
+            try
+            {
+                Directory.CreateDirectory(QaSnapshotFolder);
+                string tmp = Path.Combine(Path.GetTempPath(),
+                    $"QA_Wizard_{serial}_{DateTime.Now:yyyyMMdd_HHmm}.html");
+                File.WriteAllText(tmp, html);
+                System.Diagnostics.Process.Start(new ProcessStartInfo(tmp) { UseShellExecute = true });
+                Log($"═══ QA WIZARD {(overallPass ? "PASS" : "FAIL")} — summary opened in browser, use Ctrl+P to print. ═══",
+                    overallPass ? Theme.Green : Theme.Red);
+            }
+            catch (Exception ex) { Log($"QA WIZARD summary error: {ex.Message}", Theme.Red); }
+        }
+
+        private static string BuildWizardSummaryHtml(string serial, string boardType, double centerMHz,
+            bool step1Ok, bool step1YellowFlag, string step1Note,
+            WizardScanOutcome? step2, WizardScanOutcome? step3, bool overallPass,
+            double powerFloor, double powerCeil, string modeLabel)
+        {
+            string step1Result = !step1Ok ? "FAIL — no telem reply"
+                                : step1YellowFlag ? "PASS (yellow flag)" : "PASS";
+
+            string step2Html = step2 == null
+                ? "<p>Not run.</p>"
+                : $@"<table>
+                    <tr><td>Result</td><td>{(step2.Success && step2.SignalDetected ? "PASS" : "FAIL")}</td></tr>
+                    <tr><td>Frequency</td><td>{step2.PeakFreq:F3} MHz ({(step2.PeakFreq - centerMHz) * 1000.0:+0.0;-0.0} kHz)</td></tr>
+                    <tr><td>Signal</td><td>{(step2.SignalDetected ? $"Confirmed, {step2.ProminenceDb:F1}dB above noise floor" : $"NOT DETECTED ({step2.ProminenceDb:F1}dB above noise, need {QA_PROMINENCE_DB:F0}dB)")}</td></tr>
+                    <tr><td>Power</td><td>Not graded — uncalibrated (antenna test)</td></tr>
+                  </table>";
+
+            bool step3Pass = step3 != null && step3.Success && step3.SignalDetected &&
+                              step3.PeakDbm >= powerFloor && step3.PeakDbm <= powerCeil;
+            string step3Html = step3 == null
+                ? "<p>Not run.</p>"
+                : $@"<table>
+                    <tr><td>Result</td><td>{(step3Pass ? "PASS" : "FAIL")}</td></tr>
+                    <tr><td>Frequency</td><td>{step3.PeakFreq:F3} MHz ({(step3.PeakFreq - centerMHz) * 1000.0:+0.0;-0.0} kHz)</td></tr>
+                    <tr><td>Signal</td><td>{(step3.SignalDetected ? $"Confirmed, {step3.ProminenceDb:F1}dB above noise floor" : $"NOT DETECTED ({step3.ProminenceDb:F1}dB above noise, need {QA_PROMINENCE_DB:F0}dB)")}</td></tr>
+                    <tr><td>Power Mode</td><td>{modeLabel}</td></tr>
+                    <tr><td>Calibrated Power</td><td>{step3.PeakDbm:F1} dBm (floor {powerFloor:F0}dBm / ceiling {powerCeil:F0}dBm — PROVISIONAL, see project notes)</td></tr>
+                  </table>";
+
+            return $@"<!DOCTYPE html>
+<html><head><meta charset='utf-8'><title>QA Report — {serial}</title>
+<style>
+body {{ font-family: Consolas, 'Courier New', monospace; background: #fff; color: #111; padding: 30px; }}
+h1 {{ color: {(overallPass ? "#1a8a1a" : "#aa1a1a")}; }}
+table {{ border-collapse: collapse; margin: 10px 0 20px; }}
+td {{ padding: 4px 16px 4px 0; border-bottom: 1px solid #ddd; }}
+.pass {{ color: #1a8a1a; font-weight: bold; }}
+.fail {{ color: #aa1a1a; font-weight: bold; }}
+.note {{ color: #777; font-size: 12px; }}
+.section {{ margin-top: 24px; }}
+</style></head><body>
+<h1>SpaceCommsKit RF QA Report — {(overallPass ? "PASS" : "FAIL")}</h1>
+<p><b>Board Serial:</b> {serial} &nbsp;&nbsp; <b>Board Type:</b> {boardType} &nbsp;&nbsp;
+<b>Date:</b> {DateTime.Now:yyyy-MM-dd HH:mm}</p>
+
+<div class='section'><h2>Step 1 — UART Sanity Check (get_telem)</h2>
+<p>{step1Result}</p>
+<p>{step1Note}</p>
+</div>
+
+<div class='section'><h2>Step 2 — Antenna Test (frequency/presence, uncalibrated)</h2>
+{step2Html}</div>
+
+<div class='section'><h2>Step 3 — Attenuator Test (calibrated power)</h2>
+{step3Html}
+<p class='note'>Power floor/ceiling are PROVISIONAL — set from an estimated link budget, not yet PER-tested hardware. Refine once real board data exists.</p>
+</div>
+
+<div class='section'><h2>Overall Result: <span class='{(overallPass ? "pass" : "fail")}'>{(overallPass ? "PASS" : "FAIL")}</span></h2></div>
+</body></html>";
+        }
+
         private async Task RunRfQaAsync()
         {
-            if (!File.Exists(_rtlPowerPath))
+            bool useTinySa = cmbQaInstrument?.SelectedItem?.ToString() == "tinySA";
+
+            if (useTinySa)
+            {
+                if (!_pythonAvailable)
+                {
+                    Log("tinySA selected but Python/pyserial is not available — see warning banner above.", Theme.Red);
+                    lblQaStatus.Text      = "✗ Python not found — see warning above.";
+                    lblQaStatus.ForeColor = Theme.Red;
+                    return;
+                }
+                if (cmbTinySaPort.SelectedItem == null)
+                {
+                    Log("Select a tinySA COM port before running QA.", Theme.Yellow);
+                    return;
+                }
+            }
+            else if (!File.Exists(_rtlPowerPath))
             {
                 Log("rtl_power not found. Install RTL-SDR Blog drivers and set path above.", Theme.Red);
                 lblQaStatus.Text = "✗ rtl_power not found — see path above.";
@@ -5855,22 +7451,17 @@ Max altitude: {maxAlt:F1}m ASL</description>
             string boardType = cmbQaBoardType.SelectedItem?.ToString() ?? "SCK-915";
 
             // Target frequencies based on board type
-            // R820T tuner range: ~24MHz to ~1750MHz
             // Keep sweep tight — ±10MHz around center for faster scan
-            double centerMHz     = boardType == "SCK-2400" ? 2440.0 : 915.0;
+            double centerMHz = boardType == "SCK-2400" ? 2440.0 : 915.0;
             double sweepStartMHz = Math.Max(centerMHz - 10, 50);
-            double sweepEndMHz   = Math.Min(centerMHz + 10, 1700);
-            double h2MHz         = centerMHz * 2;   // 1830MHz for SCK-915
-            double h3MHz         = centerMHz * 3;   // 2745MHz for SCK-915
-
-            // Note: NESDR Smart tops out at ~1750MHz
-            // For SCK-915: 2nd harmonic at 1830MHz is above range — use TinySA
-            // For SCK-2400: entirely above range — use TinySA
-            if (boardType == "SCK-2400" && centerMHz > 1750)
-            {
-                Log("SCK-2400 at 2.4GHz is above NESDR Smart range (~1750MHz).", Theme.Yellow);
-                Log("For SCK-2400 QA use TinySA Ultra+ instead. Running fundamental scan only.", Theme.Yellow);
-            }
+            // RTL-SDR/NESDR Smart tuner range tops out around ~1750MHz --
+            // tinySA has no such cap for these board frequencies, so only
+            // apply the ceiling when actually using RTL-SDR.
+            double sweepEndMHz = useTinySa
+                ? centerMHz + 10
+                : Math.Min(centerMHz + 10, 1700);
+            double h2MHz = centerMHz * 2;   // 1830MHz for SCK-915
+            double h3MHz = centerMHz * 3;   // 2745MHz for SCK-915
 
             btnRunQa.Enabled      = false;
             btnQaSave.Enabled     = false;
@@ -5890,18 +7481,29 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 string snapBase = $"SCK915_{serial}_snap{_qaSnapCount:D3}";
                 string tmpFund  = Path.Combine(QaTempFolder, $"{snapBase}_fund.csv");
 
-                // Dongle index from dropdown
+                // Dongle index from dropdown (RTL-SDR path only)
                 int dongleIdx = cmbQaDongleIndex?.SelectedIndex ?? 0;
+                // tinySA point count -- matches the device's own hardware
+                // default (290), same as manually confirmed on the bench.
+                const int tinySaPoints = 290;
 
-                Log($"RF QA: scanning {sweepStartMHz:F0}–{sweepEndMHz:F0} MHz for fundamental...", Theme.Cyan);
-                Log($"RF QA: snapshot → {snapBase}  dongle index {dongleIdx}", Theme.Gray);
+                Log($"RF QA: scanning {sweepStartMHz:F0}–{sweepEndMHz:F0} MHz for fundamental " +
+                    $"({(useTinySa ? "tinySA" : "RTL-SDR")})...", Theme.Cyan);
+                Log(useTinySa
+                    ? $"RF QA: snapshot → {snapBase}  tinySA port {cmbTinySaPort.SelectedItem}"
+                    : $"RF QA: snapshot → {snapBase}  dongle index {dongleIdx}", Theme.Gray);
                 Log("RF QA: triggering board TX during scan — sending get_telem loop...", Theme.Gray);
 
-                // Start a background TX trigger loop — keeps board transmitting RF during scan
-                // KEY: Use HWID 0xFFFF (no board has this ID) so the connected board
-                // sees a non-matching HWID and relays the command over RF — forcing RF TX
-                // This works with ONE board connected via serial — no second board needed
-                // Board receives command, HWID doesn't match, transmits RF relay → NESDR catches it
+                Log("RF QA: triggering board TX during scan — sending get_telem loop...", Theme.Gray);
+
+                // Start a background TX trigger loop — keeps board transmitting
+                // RF for the full duration of scanning below, including retries.
+                // Uses QA_TRIGGER_HWID (see constants block) so the connected
+                // board relays the command out over RF -- works with ONE board
+                // connected via serial, no second board needed. Uses the SAME
+                // connection already open via the top-of-form Connect button
+                // (_port) -- both instrument paths trigger through it
+                // identically, only the capture side differs.
                 var txCts = new CancellationTokenSource();
                 _ = Task.Run(async () =>
                 {
@@ -5911,9 +7513,8 @@ Max altitude: {maxAlt:F1}m ASL</description>
                         {
                             if (_port?.IsOpen == true)
                             {
-                                ushort rfHwid = 0xFFFF; // non-matching HWID forces RF relay TX
-                                ushort seq    = IncSeqNum();
-                                WritePacket(OpenLstProtocol.BuildSimpleCommand(rfHwid, seq, "get_telem"));
+                                ushort seq = IncSeqNum();
+                                WritePacket(OpenLstProtocol.BuildSimpleCommand(QA_TRIGGER_HWID, seq, "get_telem"));
                             }
                         }
                         catch { }
@@ -5921,44 +7522,159 @@ Max altitude: {maxAlt:F1}m ASL</description>
                     }
                 }, txCts.Token);
 
-                bool ok = await RunRtlPower(
-                    $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx}" +
-                    $"{(_qaPpm != 0 ? $" -p {_qaPpm}" : "")} -P -i 3s -e 9s \"{tmpFund}\"");
+                List<(double FreqMHz, double Dbm)> fundData;
+
+                if (useTinySa)
+                {
+                    // ── Run ALL attempts, Max Hold accumulated ────────────
+                    // A single scan often misses the board's brief TX burst
+                    // entirely -- confirmed manually on the bench: it took
+                    // roughly 15 real attempts, accumulated via Max Hold
+                    // over many sweeps in the TinySA-App GUI, to catch a
+                    // burst that unquestionably happens every single time.
+                    //
+                    // Deliberately does NOT stop at the first confirmed
+                    // signal -- this is a QA measurement, and running the
+                    // full attempt budget gives the best chance of catching
+                    // the true peak of the burst (a single early success
+                    // might not have caught the burst at its strongest
+                    // moment). Safe to do now that the search window is
+                    // narrow (±200kHz, see DetectPeak) -- earlier attempts
+                    // can't accidentally pollute the accumulated peak with
+                    // some other frequency's noise.
+                    var accumulated       = new Dictionary<double, double>();
+                    int  firstConfirmedAt = 0;  // 0 = never confirmed
+
+                    for (int attempt = 1; attempt <= QA_MAX_TX_ATTEMPTS; attempt++)
+                    {
+                        string attemptFile = Path.Combine(QaTempFolder, $"{snapBase}_attempt{attempt:D2}.csv");
+
+                        bool attemptOk = await RunTinySaScan(
+                            cmbTinySaPort.SelectedItem!.ToString()!,
+                            sweepStartMHz * 1_000_000.0,
+                            sweepEndMHz   * 1_000_000.0,
+                            tinySaPoints,
+                            attemptFile);
+
+                        if (attemptOk && File.Exists(attemptFile) && new FileInfo(attemptFile).Length > 50)
+                        {
+                            var attemptData = ParseRtlPowerCsv(attemptFile);
+                            foreach (var (freq, dbm) in attemptData)
+                            {
+                                double key = SnapToBinCenter(freq, sweepStartMHz, sweepEndMHz, tinySaPoints);
+                                if (!accumulated.TryGetValue(key, out double existing) || dbm > existing)
+                                    accumulated[key] = dbm;
+                            }
+                        }
+                        try { File.Delete(attemptFile); } catch { }
+
+                        if (accumulated.Count == 0) continue;
+
+                        var accList = accumulated
+                            .Select(kv => (FreqMHz: kv.Key, Dbm: kv.Value))
+                            .OrderBy(x => x.FreqMHz).ToList();
+                        var check = DetectPeak(accList, centerMHz);
+
+                        if (check.SignalDetected && firstConfirmedAt == 0)
+                            firstConfirmedAt = attempt;
+
+                        Log($"RF QA: attempt {attempt}/{QA_MAX_TX_ATTEMPTS} — accumulated peak " +
+                            $"{check.PeakFreq:F3} MHz = {check.PeakDbm:F1} dBm " +
+                            $"({check.ProminenceDb:F1} dB above noise)" +
+                            (check.SignalDetected ? "  — signal confirmed" : ""),
+                            check.SignalDetected ? Theme.Green : Theme.Gray);
+                    }
+
+                    bool foundSignal  = firstConfirmedAt > 0;
+                    int  attemptsUsed = QA_MAX_TX_ATTEMPTS;  // always runs the full budget now
+
+                    fundData = accumulated
+                        .Select(kv => (FreqMHz: kv.Key, Dbm: kv.Value))
+                        .OrderBy(x => x.FreqMHz).ToList();
+
+                    Log(foundSignal
+                        ? $"RF QA: signal first confirmed at attempt {firstConfirmedAt}/{QA_MAX_TX_ATTEMPTS} " +
+                          $"— ran all {QA_MAX_TX_ATTEMPTS} for the best peak reading."
+                        : $"RF QA: no signal confirmed across all {QA_MAX_TX_ATTEMPTS} attempts.",
+                        foundSignal ? Theme.Green : Theme.Red);
+
+                    // Save the accumulated result as a snapshot, in the same
+                    // native CSV format used elsewhere, so Load Snapshot
+                    // still works for tinySA runs too.
+                    if (fundData.Count > 0)
+                    {
+                        try
+                        {
+                            string snapDest = Path.Combine(QaSnapshotFolder, $"{snapBase}_fund.csv");
+                            double hzStep = (sweepEndMHz - sweepStartMHz) * 1_000_000.0 / (fundData.Count - 1);
+                            string nowStr = DateTime.Now.ToString("yyyy-MM-dd, HH:mm:ss");
+                            string dbmValues = string.Join(",", fundData.Select(x => x.Dbm.ToString("F2")));
+                            File.WriteAllText(snapDest,
+                                $"{nowStr},{(long)(sweepStartMHz * 1_000_000)},{(long)(sweepEndMHz * 1_000_000)}," +
+                                $"{hzStep:F6},{fundData.Count},{dbmValues}\n");
+                            Log($"RF QA: snapshot saved → QA_Snapshots\\{snapBase}_fund.csv " +
+                                $"({attemptsUsed} attempt(s) accumulated)", Theme.Gray);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"RF QA: failed to save accumulated snapshot: {ex.Message}", Theme.Yellow);
+                        }
+                    }
+                }
+                else
+                {
+                    // ── RTL-SDR path — unchanged single-shot scan ─────────
+                    bool ok = await RunRtlPower(
+                        $"-f {sweepStartMHz:F0}M:{sweepEndMHz:F0}M:10k -g 496 -d {dongleIdx}" +
+                        $"{(_qaPpm != 0 ? $" -p {_qaPpm}" : "")} -P -i 3s -e 9s \"{tmpFund}\"");
+
+                    bool fundHasData = File.Exists(tmpFund) && new FileInfo(tmpFund).Length > 50;
+                    if (!fundHasData)
+                    {
+                        Log("rtl_power fundamental scan failed — no data written.", Theme.Red);
+                        lblQaStatus.Text      = "✗ Scan failed — check dongle connection.";
+                        lblQaStatus.ForeColor = Theme.Red;
+                        txCts.Cancel();
+                        return;
+                    }
+
+                    fundData = ParseRtlPowerCsv(tmpFund);
+                    try
+                    {
+                        string snapDest = Path.Combine(QaSnapshotFolder, $"{snapBase}_fund.csv");
+                        File.Copy(tmpFund, snapDest, overwrite: true);
+                        Log($"RF QA: snapshot saved → QA_Snapshots\\{snapBase}_fund.csv", Theme.Gray);
+                    }
+                    catch { }
+                    try { File.Delete(tmpFund); } catch { }
+                }
 
                 txCts.Cancel();
 
-                // Check file exists and has content even if exit code non-zero
-                // rtl_power sometimes returns non-zero but still writes valid data
-                bool fundHasData = File.Exists(tmpFund) && new FileInfo(tmpFund).Length > 50;
-                if (!fundHasData)
+                if (fundData.Count == 0)
                 {
-                    Log("rtl_power fundamental scan failed — no data written.", Theme.Red);
-                    lblQaStatus.Text      = "✗ Scan failed — check dongle connection.";
+                    Log("No data returned from scan.", Theme.Red);
+                    lblQaStatus.Text      = "✗ No data — check connection.";
                     lblQaStatus.ForeColor = Theme.Red;
                     return;
                 }
 
-                var fundData = ParseRtlPowerCsv(tmpFund);
-                // Copy snapshot to QA_Snapshots for later browsing — don't delete
-                try
-                {
-                    string snapDest = Path.Combine(QaSnapshotFolder, $"{snapBase}_fund.csv");
-                    File.Copy(tmpFund, snapDest, overwrite: true);
-                    Log($"RF QA: snapshot saved → QA_Snapshots\\{snapBase}_fund.csv", Theme.Gray);
-                }
-                catch { }
-                try { File.Delete(tmpFund); } catch { }
-
-                if (fundData.Count == 0)
-                { Log("No data returned from rtl_power CSV.", Theme.Red); return; }
-
                 Log($"RF QA: fundamental scan got {fundData.Count} frequency bins.", Theme.Gray);
 
-                // ── SCAN 2: Harmonics (SCK-915 only, within NESDR range) ──
+                // ── SCAN 2: Harmonics (RTL-SDR/SCK-915 path only for now) ──
+                // Not yet implemented for tinySA — would need a second
+                // synchronized scan+trigger cycle at the harmonic
+                // frequencies. Fundamental-only via tinySA is tonight's
+                // scope; harmonics via tinySA is a follow-up.
                 List<(double FreqMHz, double Dbm)> h2Data = new();
                 List<(double FreqMHz, double Dbm)> h3Data = new();
 
-                if (boardType == "SCK-915")
+                if (useTinySa)
+                {
+                    Log("RF QA: harmonic check not yet implemented for tinySA — fundamental only.",
+                        Theme.Gray);
+                }
+                else if (boardType == "SCK-915")
                 {
                     // 2nd harmonic at 1830MHz is just above NESDR Smart limit (~1750MHz)
                     // Scan up to 1700MHz to catch anything in range
@@ -5971,7 +7687,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                         Log($"RF QA: scanning harmonic region {harmStart:F0}–{harmEnd:F0} MHz...", Theme.Cyan);
 
                         string tmpHarm = Path.Combine(Path.GetTempPath(), $"qa_harm_{Guid.NewGuid():N}.csv");
-                        ok = await RunRtlPower(
+                        bool ok = await RunRtlPower(
                             $"-f {harmStart:F0}M:{harmEnd:F0}M:100k -g 496" +
                             $"{(_qaPpm != 0 ? $" -p {_qaPpm}" : "")} -P -i 3s -e 9s \"{tmpHarm}\"");
 
@@ -5995,83 +7711,90 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 _qaSpectrum = fundData;
                 pnlQaChart.Invalidate();
 
-                // Find peak NEAR the expected center frequency (±8MHz)
-                var nearCenter = fundData.Where(x => Math.Abs(x.FreqMHz - centerMHz) <= 8.0).ToList();
-                var searchSet  = nearCenter.Count > 0 ? nearCenter : fundData;
+                // ── Final peak detection on the full result set ──────────
+                // Uses the same DetectPeak helper as the retry loop above,
+                // so the accumulated result and the final reported result
+                // are judged by identical logic -- see DetectPeak's own
+                // comment (near the trigger loop, above) for the full
+                // reasoning behind the prominence check.
+                var result = DetectPeak(fundData, centerMHz);
+                double peakFreq       = result.PeakFreq;
+                double peakDbm        = result.PeakDbm;
+                bool   signalDetected = result.SignalDetected;
 
-                // 2-FSK detection: the signal appears as two symmetric tones
-                // around the center frequency. Find the midpoint between the
-                // two highest peaks rather than taking the single max bin.
-                var top2 = searchSet.OrderByDescending(x => x.Dbm).Take(20)
-                    .OrderBy(x => x.FreqMHz).ToList();
-
-                double peakFreq, peakDbm;
-                if (top2.Count >= 2)
+                if (!signalDetected)
                 {
-                    // Find the two highest well-separated peaks (>50kHz apart)
-                    var highest = top2.OrderByDescending(x => x.Dbm).First();
-                    var second  = top2.OrderByDescending(x => x.Dbm)
-                        .FirstOrDefault(x => Math.Abs(x.FreqMHz - highest.FreqMHz) > 0.05);
-
-                    if (second != default && Math.Abs(second.FreqMHz - highest.FreqMHz) < 1.0)
-                    {
-                        // Two FSK tones found — center is midpoint
-                        peakFreq = (highest.FreqMHz + second.FreqMHz) / 2.0;
-                        peakDbm  = Math.Max(highest.Dbm, second.Dbm);
-                        Log($"RF QA: 2-FSK tones at {highest.FreqMHz:F3} + {second.FreqMHz:F3} MHz → center {peakFreq:F3} MHz", Theme.Gray);
-                    }
-                    else
-                    {
-                        peakFreq = highest.FreqMHz;
-                        peakDbm  = highest.Dbm;
-                    }
+                    Log($"RF QA: ⚠ NO SIGNAL DETECTED — highest bin {peakFreq:F3} MHz = " +
+                        $"{peakDbm:F1} dBm is only {result.ProminenceDb:F1} dB above the noise floor " +
+                        $"({result.NoiseFloorDbm:F1} dBm) — need {QA_PROMINENCE_DB:F0} dB minimum. " +
+                        $"Verify the board is actually transmitting and the connection is good.", Theme.Red);
                 }
                 else
                 {
-                    var best = searchSet.OrderByDescending(x => x.Dbm).First();
-                    peakFreq = best.FreqMHz;
-                    peakDbm  = best.Dbm;
+                    Log($"RF QA: signal confirmed — {result.ProminenceDb:F1} dB above noise floor " +
+                        $"({result.NoiseFloorDbm:F1} dBm)", Theme.Green);
                 }
 
-                Log($"RF QA: peak at {peakFreq:F3} MHz = {peakDbm:F1} dBm (searched {searchSet.Count} bins)", Theme.Gray);
+                Log($"RF QA: peak at {peakFreq:F3} MHz = {peakDbm:F1} dBm measured " +
+                    $"(final result, {fundData.Count} bins)", Theme.Gray);
 
-                // ── Auto-calculate dongle PPM from this scan ─────────────
-                // Use board as reference — SmartRF verified 915.000 MHz
-                // PPM = (measured - actual) / actual × 1,000,000
-                // This corrects for dongle crystal offset — logged for transparency
-                // Manual override: if user typed a PPM value, use that instead
-                int autoPpm = (int)Math.Round((peakFreq - centerMHz) / centerMHz * 1_000_000);
-                int displayPpm = _qaManualPpm ? _qaPpm : autoPpm;
+                // ── Direct-connect power calibration ──────────────────────
+                // ATTENUATOR_DB is defined once, near the top of this file --
+                // see that constant's comment if your bench setup differs.
+                // Only applied when chkAttenuatorConfirmed is checked -- see
+                // that control's comment for why this is opt-in rather than
+                // a standing assumption. peakDbm below is real, absolute
+                // output power ONLY in the confirmed-attenuator case; in the
+                // unconfirmed case it stays exactly what the instrument
+                // measured, uncorrected.
+                bool attenuatorConfirmed = chkAttenuatorConfirmed.Checked;
+                if (attenuatorConfirmed)
+                    peakDbm += ATTENUATOR_DB;
 
-                // Apply PPM correction to spectrum for display
-                // Shifts all frequency bins so peak lands at true center
-                double ppmShiftMHz = centerMHz * displayPpm / 1_000_000.0;
-                var correctedSpectrum = fundData
-                    .Select(x => (FreqMHz: x.FreqMHz - ppmShiftMHz, x.Dbm))
-                    .ToList();
-                _qaSpectrum     = correctedSpectrum;
-                _qaRawPpm       = autoPpm;
-                _qaDisplayPpm   = displayPpm;
+                // Informational only -- NOT a pass/fail gate. RF Power Mode
+                // is a firmware build-time choice (Firmware tab), not
+                // something this scan can control or assume -- this just
+                // shows what the firmware was last built for, from this
+                // codebase's own PA_TABLE/TX_POWER comments, so whoever's
+                // reading the result has context for the real number above.
+                string powerModeNote = rbPowerField.Checked
+                    ? "Max Power build (~28dBm target, CC1110+CC1190)"
+                    : "0dBm Bench build (~0dBm target)";
+                Log(attenuatorConfirmed
+                    ? $"RF QA: calibrated output = {peakDbm:F1} dBm " +
+                      $"(measured + {ATTENUATOR_DB}dB attenuator, CONFIRMED)  " +
+                      $"[firmware last built for: {powerModeNote}]"
+                    : $"RF QA: ⚠ UNCALIBRATED reading = {peakDbm:F1} dBm " +
+                      $"(attenuator NOT confirmed — checkbox unchecked, no correction applied. " +
+                      $"This is the raw instrument measurement, not true output power.)  " +
+                      $"[firmware last built for: {powerModeNote}]",
+                    attenuatorConfirmed ? Theme.Cyan : Theme.Yellow);
+
+
+                // ── NO frequency correction is applied — raw measurement only ──
+                // A previous version of this code auto-calculated a "dongle PPM"
+                // offset and silently shifted the reported peak to make it land
+                // on the expected center frequency. This produced a false PASS
+                // on a scan that never actually caught the board's real TX burst
+                // (raw peak was ~5.3MHz off — nowhere near legitimate crystal
+                // drift, which tops out around tens of PPM, not thousands) — the
+                // correction math papered over a bad measurement instead of
+                // flagging it. Removed entirely. What you see here is exactly
+                // what the instrument measured, nothing adjusted.
+                _qaSpectrum = fundData;
                 pnlQaChart.Invalidate();
 
-                // Corrected peak frequency for results
-                double correctedPeakFreq  = peakFreq - ppmShiftMHz;
-                double correctedErrorKHz  = (correctedPeakFreq - centerMHz) * 1000.0;
-
-                Log($"RF QA: raw peak {peakFreq:F3} MHz → corrected {correctedPeakFreq:F3} MHz " +
-                    $"(dongle PPM: {autoPpm:+0;-0}{(_qaManualPpm ? " manual" : " auto")})", Theme.Gray);
-
-                double freqErrorKHz = correctedErrorKHz;
+                double freqErrorKHz = (peakFreq - centerMHz) * 1000.0;
 
                 double h2Dbm  = h2Data.Count > 0 ? h2Data.Max(x => x.Dbm) : -999;
                 double h3Dbm  = h3Data.Count > 0 ? h3Data.Max(x => x.Dbm) : -999;
                 double h2Dbc  = h2Dbm  > -999 ? h2Dbm  - peakDbm : -999;
                 double h3Dbc  = h3Dbm  > -999 ? h3Dbm  - peakDbm : -999;
 
-                // Frequency pass limit — ±10kHz after PPM correction applied
-                // PPM is always auto-calculated so correction is always applied
+                // Frequency pass limit — ±10kHz against the RAW measured peak,
+                // no correction applied. A failure here is a real failure.
                 double freqPassLimitKHz = 10.0;
-                bool freqPass = Math.Abs(freqErrorKHz) <= freqPassLimitKHz;
+                bool freqPass = signalDetected && Math.Abs(freqErrorKHz) <= freqPassLimitKHz;
                 bool h2Pass   = h2Dbc <= -999 || h2Dbc < -40.0; // pass if no data (out of range) or < -40dBc
                 bool h3Pass   = h3Dbc <= -999 || h3Dbc < -40.0;
 
@@ -6081,14 +7804,14 @@ Max altitude: {maxAlt:F1}m ASL</description>
                     BoardType        = boardType,
                     Firmware         = txtFirmwareFile?.Text.Trim() ?? "",
                     RawPeakFreqMHz   = peakFreq,
-                    PeakFreqMHz      = correctedPeakFreq,
-                    FreqErrorKHz     = correctedErrorKHz,
+                    PeakFreqMHz      = peakFreq,
+                    FreqErrorKHz     = freqErrorKHz,
                     PeakDbm          = peakDbm,
                     H2Dbc            = h2Dbc,
                     H3Dbc            = h3Dbc,
-                    PpmCorrection    = displayPpm,
-                    RawPpm           = autoPpm,
-                    PpmIsManual      = _qaManualPpm,
+                    PpmCorrection    = 0,       // correction removed -- kept as 0 for
+                    RawPpm           = 0,       // downstream compatibility (certificate/
+                    PpmIsManual      = false,   // results panel), not used for anything.
                     FreqPass         = freqPass,
                     H2Pass           = h2Pass,
                     H3Pass           = h3Pass,
@@ -6104,7 +7827,9 @@ Max altitude: {maxAlt:F1}m ASL</description>
                   + $"H3: {(h3Dbc > -999 ? $"{h3Dbc:F1} dBc" : "N/A")}",
                     _lastQaResult.Overall ? Theme.Green : Theme.Red);
 
-                lblQaStatus.Text      = $"✓ Complete — {overall}";
+                lblQaStatus.Text      = signalDetected
+                    ? $"✓ Complete — {overall}"
+                    : $"✗ NO SIGNAL DETECTED — check connection/attenuator, board TX";
                 lblQaStatus.ForeColor = _lastQaResult.Overall ? Theme.Green : Theme.Red;
                 btnQaSave.Enabled     = true;
                 btnQaPrint.Enabled    = true;
@@ -6131,7 +7856,9 @@ Max altitude: {maxAlt:F1}m ASL</description>
             lblQaFreqVal.ForeColor = r.FreqPass ? Theme.Green : Theme.Red;
 
             // Power
-            lblQaPowerVal.Text      = $"{r.PeakDbm:F1} dBm  (relative — uncalibrated)";
+            lblQaPowerVal.Text      = chkAttenuatorConfirmed.Checked
+                ? $"{r.PeakDbm:F1} dBm  (direct-connect, +{ATTENUATOR_DB}dB attenuator confirmed)"
+                : $"{r.PeakDbm:F1} dBm  ⚠ UNCALIBRATED — attenuator not confirmed, raw reading only";
             lblQaPowerVal.ForeColor = Theme.White;
 
             // H2
@@ -6167,6 +7894,69 @@ Max altitude: {maxAlt:F1}m ASL</description>
         }
 
         // ── Launch rtl_power as subprocess ──────────────────────────────
+        // ── Run tinySA scan via the bundled Python script ─────────────────
+        // Mirrors RunRtlPower()'s exact shape (process launch, streamed
+        // logging, timeout+kill) so the two instrument paths stay
+        // structurally consistent and easy to compare/maintain.
+        private async Task<bool> RunTinySaScan(string port, double startHz, double stopHz,
+                                                 int points, string outputPath)
+        {
+            if (!_pythonAvailable)
+            {
+                Log("tinySA scan requested but Python/pyserial is not available " +
+                    "(see warning banner on RF QA tab).", Theme.Red);
+                return false;
+            }
+            if (!File.Exists(TinySaScriptPath))
+            {
+                Log($"tinySA QA script not found at {TinySaScriptPath} — " +
+                    "reinstall or reach out to SpaceCommsKit support.", Theme.Red);
+                return false;
+            }
+
+            try
+            {
+                string args = $"\"{TinySaScriptPath}\" --port {port} " +
+                              $"--start {startHz:F0} --stop {stopHz:F0} " +
+                              $"--points {points} --output \"{outputPath}\"";
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName               = _pythonExe,
+                    Arguments              = args,
+                    WorkingDirectory       = AppDomain.CurrentDomain.BaseDirectory,
+                    UseShellExecute        = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError  = true,
+                    CreateNoWindow         = true,
+                };
+                using var proc = new Process { StartInfo = psi };
+                proc.OutputDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data))
+                        BeginInvoke(new Action(() => Log("  tinysa: " + e.Data.Trim(), Theme.Gray)));
+                };
+                proc.ErrorDataReceived += (s, e) =>
+                {
+                    if (!string.IsNullOrWhiteSpace(e.Data))
+                        BeginInvoke(new Action(() => Log("  tinysa: " + e.Data.Trim(), Theme.Gray)));
+                };
+                proc.Start();
+                proc.BeginOutputReadLine();
+                proc.BeginErrorReadLine();
+                // Script has its own internal 15s response timeout -- give
+                // the wrapper process a bit more headroom than that.
+                bool exited = await Task.Run(() => proc.WaitForExit(25000));
+                if (!exited) { proc.Kill(); Log("  tinysa: timeout — killed.", Theme.Yellow); return false; }
+                return proc.ExitCode == 0;
+            }
+            catch (Exception ex)
+            {
+                Log($"tinySA script launch failed: {ex.Message}", Theme.Red);
+                return false;
+            }
+        }
+
         private async Task<bool> RunRtlPower(string args)
         {
             try
@@ -6258,7 +8048,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
                 string snapNum = $"snap{_qaSnapCount:D3}";
                 string fname   = Path.Combine(QaSnapshotFolder,
                     $"SCK915_{serial}_{snapNum}_{DateTime.Now:yyyyMMdd_HHmm}.txt");
-                File.WriteAllText(fname, BuildQaSummaryText(_lastQaResult));
+                File.WriteAllText(fname, BuildQaSummaryText(_lastQaResult, chkAttenuatorConfirmed.Checked));
                 Log($"QA log saved: {fname}", Theme.Green);
                 System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{fname}\"");
             }
@@ -6283,7 +8073,7 @@ Max altitude: {maxAlt:F1}m ASL</description>
             catch (Exception ex) { Log($"QA print error: {ex.Message}", Theme.Red); }
         }
 
-        private static string BuildQaSummaryText(QaResult r)
+        private static string BuildQaSummaryText(QaResult r, bool attenuatorConfirmed)
         {
             string h2Str = r.H2Dbc > -999
                 ? $"{r.H2Dbc:F1} dBc    " + (r.H2Pass ? "PASS (< -40 dBc)" : "FAIL")
@@ -6312,7 +8102,7 @@ RF MEASUREMENTS
 
 Center Frequency:  {r.PeakFreqMHz:F3} MHz
 Frequency Error:   {r.FreqErrorKHz:+0.00;-0.00} kHz    {(r.FreqPass ? "PASS (≤ ±10 kHz)" : "FAIL (> ±10 kHz)")}
-Peak Power:        {r.PeakDbm:F1} dBm (relative — uncalibrated)
+Peak Power:        {r.PeakDbm:F1} dBm {(attenuatorConfirmed ? $"(direct-connect, +{ATTENUATOR_DB}dB attenuator confirmed)" : "(UNCALIBRATED — attenuator not confirmed, raw reading only)")}
 2nd Harmonic:      {h2Str}
 3rd Harmonic:      {h3Str}
 

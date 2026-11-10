@@ -4,19 +4,18 @@
  *
  * Purpose:
  *   RF layer interface. Declares TX/RX functions, power control,
- *   and RF switch control for the SKY13317-373LF.
+ *   and RF switch control (SKY13317-373LF on LaunchPad, SKYA21001 on V3).
  *
  * RF Configuration:
  *   Frequency:   2440 MHz (Channel 18)
  *   PHY:         2-GFSK, 250 kbps, 125 kHz deviation
- *   TX Power:    0 dBm bench / +20 dBm field
+ *   TX Power:    0 dBm bench / +20 dBm field (SCK_TXPWR_MODE)
  *   High PA:     Enabled (txPowerTable_2400_pa20, SDK 8_32 separate tables)
- *   RF Switch:   SKY13317 -- DIO28 (2.4GHz), DIO29 (PA enable)
+ *   RF Switch:   DIO28 (standard path), DIO29 (20 dBm PA path)
  *
  * SCK-DEV: RF_CONFIG -- Change frequency/PHY in sck2400.syscfg,
  *          then update SCK_CMD_SETUP and SCK_CMD_FS below.
- * SCK-DEV: TX_POWER  -- Change bench/field power in radio.c
- *          RF_setTxPower() call. See Section 3.2 of requirements.
+ * SCK-DEV: TX_POWER  -- Build define SCK_TXPWR_MODE (see below).
  *
  * Reference: SCK-2400_Firmware_Requirements.md Section 3.2, 4.2, 4.3
  */
@@ -51,21 +50,67 @@
 
 /* -----------------------------------------------------------------------
  * TX Power Levels
- * Build system passes TX_POWER=BENCH or TX_POWER=FIELD via Makefile.
- * SCK-DEV: TX_POWER -- These map to RF_setTxPower() calls in radio.c.
+ * SCK-DEV: TX_POWER -- Select with a NUMERIC build define:
+ *     -DSCK_TXPWR_MODE=0   bench  (0 dBm, standard PA, RF_P/RF_N path)
+ *     -DSCK_TXPWR_MODE=1   field  (+20 dBm, high PA, TX_20DBM path)
+ *   Default (no define) = bench.
+ *
+ * Why not TX_POWER=BENCH / TX_POWER=FIELD any more (Bug A, 10/20/26):
+ *   The preprocessor treats undefined words like BENCH and FIELD as 0,
+ *   so (TX_POWER == FIELD) was (0 == 0) -- ALWAYS true. Every build,
+ *   "bench" included, ran at +20 dBm. The old names now raise an error.
  * --------------------------------------------------------------------- */
 #define SCK_TX_POWER_BENCH_DBM      0       /* 0 dBm  -- bench/lab use  */
 #define SCK_TX_POWER_FIELD_DBM      20      /* +20 dBm -- field/flight  */
 
-#define TX_POWER BENCH
-#ifndef TX_POWER
+#define SCK_TXPWR_BENCH             0
+#define SCK_TXPWR_FIELD             1
+
+#ifdef TX_POWER
+#error "TX_POWER is retired (always evaluated as FIELD). Use -DSCK_TXPWR_MODE=0 (bench) or 1 (field)."
+#endif
+
+#define SCK_TXPWR_MODE 0   // GS-PATCH: 0 dBm bench
+#ifndef SCK_TXPWR_MODE
+#define SCK_TXPWR_MODE              SCK_TXPWR_BENCH
+#endif
+
+#if (SCK_TXPWR_MODE != SCK_TXPWR_BENCH) && (SCK_TXPWR_MODE != SCK_TXPWR_FIELD)
+#error "SCK_TXPWR_MODE must be 0 (bench) or 1 (field)"
 #endif
 
 /* -----------------------------------------------------------------------
- * RF Switch GPIO (SKY13317-373LF)
+ * RF Switch Variant -- single definition shared by radio.c and main.c
+ * SCK-DEV: RF_SWITCH -- pass -DRF_SWITCH_SKYA21001=1 in the V3 build
+ *   configuration. Default 0 = LaunchPad (SKY13317-373LF).
+ * --------------------------------------------------------------------- */
+#define RF_SWITCH_SKYA21001 1   // GS-PATCH: SKYA21001 (SCK-2400 V3)
+#ifndef RF_SWITCH_SKYA21001
+#define RF_SWITCH_SKYA21001 0   /* 0 = SKY13317-373LF (LaunchPad)     */
+#endif                          /* 1 = SKYA21001 (SCK-2400 Mini V3)   */
+
+/* -----------------------------------------------------------------------
+ * CW bring-up test (V3 +20 dBm measurement)
+ * SCK-DEV: RF_TEST -- -DSCK_RF_CW_TEST=1 makes rfTask key an unmodulated
+ *   carrier at 2440 MHz forever after radio_init() (no beacon, no RX).
+ *   Power level follows SCK_TXPWR_MODE. LED blinks slowly while keyed.
+ *   NEVER ship with this set. Use a 30 dB attenuator on the analyzer.
+ * --------------------------------------------------------------------- */
+#define SCK_RF_CW_TEST 0   // GS-PATCH: normal firmware
+#ifndef SCK_RF_CW_TEST
+#define SCK_RF_CW_TEST 0
+#endif
+
+/* -----------------------------------------------------------------------
+ * RF Switch GPIO
  * Controlled directly via GPIO driver -- not RF switch plugin.
- * DIO28 = 2.4GHz path select
- * DIO29 = PA enable
+ *
+ * LaunchPad (SKY13317-373LF):  DIO28 = 2.4GHz path, DIO29 = PA path
+ *
+ * SCK-2400 Mini V3 (SKYA21001, wired per TI -2 convention):
+ *   DIO28 (pkg pin 41) -> V2 -> J1-J2 -> C491 -> standard RF_P/RF_N path
+ *   DIO29 (pkg pin 42) -> V1 -> J1-J3 -> C58  -> 20 dBm PA path
+ *   RX and standard-PA TX use DIO28; only high-PA TX uses DIO29.
  * --------------------------------------------------------------------- */
 #define SCK_RF_SW_2G4_DIO   28
 #define SCK_RF_SW_PA_DIO    29
@@ -147,11 +192,34 @@ void radio_setTxPower(int8_t dbm);
 
 /*
  * radio_rfSwitchSet()
- * Drive SKY13317 RF switch GPIOs for selected path.
- * Called internally before TX and RX.
+ * Drive RF switch GPIOs for selected path.
+ * Called internally before TX and RX. On SKYA21001 (V3) TX routes to the
+ * PA throw only when the high PA is the active TX power setting.
  * Parameters:
  *   txMode -- true for TX path, false for RX path
  */
 void radio_rfSwitchSet(bool txMode);
+
+/*
+ * radio_isHighPaActive()
+ * Returns true if the last radio_setTxPower() selected the 20 dBm PA.
+ */
+bool radio_isHighPaActive(void);
+
+/*
+ * radio_txPowerOk()
+ * Bring-up diagnostic: true if the last radio_setTxPower() found the table
+ * entry, RF_setTxPower() returned RF_StatSuccess, and RF_getTxPower() reads
+ * back the same PA type and value.
+ */
+bool radio_txPowerOk(void);
+
+/*
+ * radio_cwStart()
+ * Bring-up only: key an unmodulated carrier at the configured frequency
+ * and power. Runs until the RF handle is closed or the board resets.
+ * Returns: true if the command was posted.
+ */
+bool radio_cwStart(void);
 
 #endif /* RADIO_H */

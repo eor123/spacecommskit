@@ -69,16 +69,37 @@
 #include "ti/common/cc23xx/bim/bim_util.h"
 #endif
 #include "ti/common/cc26xx/oad/oad_image_header.h"
-    /* main() diagnostic: 3 fast blinks = reached main() */
-    {
-        for (int _i = 0; _i < 6; _i++) {
-            if (_i & 1) GPIO_setDio(IOID_7);
-            else        GPIO_clearDio(IOID_7);
-            volatile uint32_t _d = 200000; while(_d--);
-        }
-        GPIO_clearDio(IOID_7);
-        volatile uint32_t _p = 500000; while(_p--);
+#include "driverlib/prcm.h"
+#include DeviceFamily_constructPath(driverlib/cpu.h)       /* CPUdelay()           */
+#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)  /* SysCtrlSystemReset() */
+
+/* -----------------------------------------------------------------------
+ * SCK diagnostic: 3 fast blinks on DIO7 (status LED) = BIM reached main().
+ *
+ * 11/01/26: this block had drifted outside any function (file scope), which
+ * broke the build ("expected identifier or '('" at this line). Restored as a
+ * function called at the top of main(). It powers the PERIPH domain and the
+ * GPIO clock itself, the same sequence as blink_test.c, so it works this
+ * early in boot. DIO7 is the status LED on both the LaunchPad (green) and
+ * the SCK-2400 V3 (D1).
+ * --------------------------------------------------------------------- */
+static void sckBimDiagBlink(void)
+{
+    PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH);
+    while (PRCMPowerDomainsAllOn(PRCM_DOMAIN_PERIPH) != PRCM_DOMAIN_POWER_ON);
+    PRCMPeripheralRunEnable(PRCM_PERIPH_GPIO);
+    PRCMLoadSet();
+    while (!PRCMLoadGet());
+    IOCPinTypeGpioOutput(IOID_7);
+
+    for (int _i = 0; _i < 6; _i++) {
+        if (_i & 1) GPIO_setDio(IOID_7);
+        else        GPIO_clearDio(IOID_7);
+        volatile uint32_t _d = 200000; while(_d--);
     }
+    GPIO_clearDio(IOID_7);
+    volatile uint32_t _p = 500000; while(_p--);
+}
 
 #ifdef __IAR_SYSTEMS_ICC__
 #include <intrinsics.h>
@@ -109,6 +130,34 @@
 #define FAIL                           ~0x0
 
 #define ONCHIP_COPY_CHUNK_SIZE          256            /* Max number of bytes to copy on on-chip flash */
+
+/* -----------------------------------------------------------------------
+ * SCK-2400 golden image + trial boot (11/09/26)
+ *
+ * Ext flash map (MX25R8035F, 1 MB, 4 KB pages):
+ *   0x00000  page 0   GOLDEN metadata (EFL_ADDR_META_FACT_IMG). Valid only
+ *                     when metadata.counter == SCK_GOLDEN_MAGIC.
+ *   0x01000  page 1   OAD candidate metadata (written by app CMD_OAD_END)
+ *   0x02000           OAD candidate image   (up to 0x4E000)
+ *   0x80000           GOLDEN image          (up to 0x4E000, CMD_OAD_SET_GOLDEN)
+ *
+ * Trial boot: candidate metadata.counter starts 0xFFFFFFFF.
+ *   Low byte  = boot attempts: BIM clears one bit per boot of an
+ *               unconfirmed candidate (0xFF -> 0xFE -> 0xFC -> 0xF8).
+ *   Top byte  = confirm: app writes 0x00 after a valid command arrives
+ *               (it can hear the ground station).
+ *   SCK_TRIAL_MAX_BOOTS boots without a confirm -> candidate marked
+ *   CRC_INVALID and the BIM reverts to the golden image.
+ * --------------------------------------------------------------------- */
+#define SCK_GOLDEN_MAGIC                0x444C4F47u    /* "GOLD" */
+#define SCK_CAND_META_PAGE              1
+#define SCK_TRIAL_MAX_BOOTS             3u
+#define SCK_TRIAL_CONFIRM_MASK          0xFF000000u
+
+/* "Nothing valid" retry: instead of setLowPowerMode() forever, wait and
+ * reset so a transient ext-flash/power problem at boot can clear.
+ * CPUdelay() is 3 cycles per loop at 48 MHz -> 16e6 loops ~= 1 s. */
+#define SCK_BIM_RETRY_DELAY_LOOPS       (16000000u * 10u)   /* ~10 s */
 
 #if defined(DeviceFamily_CC23X0R2)
 #define START_PAGE                      7
@@ -176,6 +225,9 @@ static int8_t checkImagesExtFlash(void);
 static uint8_t checkImagesIntFlash(uint8_t flashPageNum);
 static bool Bim_revertFactoryImage(void);
 static void Bim_checkImages(void);
+static void Bim_trialRecordBoot(uint8_t metaPage, uint32_t counter);
+static uint32_t Bim_sckCrc32(uint32_t addr, uint32_t len, bool extFl);
+static void Bim_trialCheck(void);
 
 #if defined(SECURITY)
 uint8_t Bim_payloadVerify(uint8_t ver, uint32_t cntr, uint32_t payloadlen,
@@ -504,12 +556,15 @@ static int8_t checkImagesExtFlash(void)
                 the CRC of the copied
                 and update it's CRC status. CRC_STAT_OFFSET
                 */
-                uint32_t crc32 = CRC32_calc(FLASH_PAGE(startAddr), intFlashPageSize, 0, imgFxdHdr.len, false);
+                /* SCK: same CRC the GS writes into the header (Bim_sckCrc32) */
+                uint32_t crc32 = Bim_sckCrc32(startAddr, imgFxdHdr.len, false);
                 if(crc32 == imgFxdHdr.crc32) // if crc matched then update its status in the copied image
                 {
                     status = CRC_VALID;
                     /* update status in meta data */
-                    extFlashWrite(FLASH_ADDRESS(flashPageNum, CRC_STAT_OFFSET),
+                    /* SCK: FLASH_ADDRESS() uses the internal page size (8 KB);
+                     * the metadata page is EXT_FLASH_ADDRESS (4 KB pages). */
+                    extFlashWrite(EXT_FLASH_ADDRESS(flashPageNum, CRC_STAT_OFFSET),
                                     sizeof(status), &status);
 
                     /* update status in internal flash */
@@ -530,6 +585,11 @@ static int8_t checkImagesExtFlash(void)
                         (imgFxdHdr.imgType == OAD_IMG_TYPE_APPSTACKLIB)) &&
                         (securityStatus == SUCCESS))
                     {
+                        /* SCK: first boot of a new candidate counts as trial boot 1 */
+                        if (flashPageNum == SCK_CAND_META_PAGE)
+                        {
+                            Bim_trialRecordBoot(SCK_CAND_META_PAGE, metadataHdr.counter);
+                        }
                         /* close external Flash gracefully before jumping */
                         extFlashClose();
                         jumpToPrgEntry((uint32_t*)imgFxdHdr.prgEntry);
@@ -538,7 +598,9 @@ static int8_t checkImagesExtFlash(void)
                 else /* CRC check failed */
                 {
                     status = CRC_INVALID;
-                    extFlashWrite((eFlStrAddr + CRC_STAT_OFFSET), 1, &status);
+                    /* SCK: mark the metadata (not the image header) so this
+                     * candidate is never picked up again. */
+                    extFlashWrite(EXT_FLASH_ADDRESS(flashPageNum, CRC_STAT_OFFSET), 1, &status);
                 }
 
                 status = COPY_DONE;
@@ -630,7 +692,7 @@ static uint8_t checkImagesIntFlash(uint8_t flashPageNum)
                 uint8_t  crcstat = CRC_VALID;
 
                 /* Calculate the CRC over the data buffer and update status */
-                uint32_t crc32 = CRC32_calc(flashPageNum, intFlashPageSize, 0, imgHdr.len, false);
+                uint32_t crc32 = Bim_sckCrc32((uint32_t)startAddr, imgHdr.len, false);   /* SCK CRC */
 
                 /* Check if calculated CRC matched with the image header */
                 if(crc32 != imgHdr.crc32)
@@ -703,6 +765,16 @@ static bool Bim_revertFactoryImage(void)
     /* check BIM and Metadata version */
     if(metadataHdr.fixedHdr.crcStat != CRC_VALID)  /* Invalid CRC */
     {
+        extFlashClose();
+        return false;
+    }
+
+    /* SCK: only a golden image written by CMD_OAD_SET_GOLDEN is used.
+     * (Older firmware wrote OAD metadata to page 0; never treat that as
+     * golden.) */
+    if(metadataHdr.counter != SCK_GOLDEN_MAGIC)
+    {
+        extFlashClose();
         return false;
     }
 
@@ -723,6 +795,16 @@ static bool Bim_revertFactoryImage(void)
            (metadataHdr.fixedHdr.prgEntry < startAddr) ||
            (metadataHdr.fixedHdr.prgEntry > (startAddr + metadataHdr.fixedHdr.len)))
     {
+       extFlashClose();
+       return false;
+    }
+
+    /* SCK: verify the golden image in ext flash BEFORE Bim_copyImage()
+     * erases internal flash. A damaged golden must never replace a
+     * bootable (even if unconfirmed) internal image. */
+    if(Bim_sckCrc32(eFlStrAddr, metadataHdr.fixedHdr.len, true) != metadataHdr.fixedHdr.crc32)
+    {
+       extFlashClose();
        return false;
     }
 
@@ -730,7 +812,7 @@ static bool Bim_revertFactoryImage(void)
     if(Bim_copyImage(eFlStrAddr, metadataHdr.fixedHdr.len, startAddr) == SUCCESS)
     {
         // Calculate the CRC of the copied on-chip image to make sure copy is successful
-        uint32_t crc32 = CRC32_calc(FLASH_PAGE(startAddr), intFlashPageSize, 0, metadataHdr.fixedHdr.len, false);
+        uint32_t crc32 = Bim_sckCrc32(startAddr, metadataHdr.fixedHdr.len, false);
         uint8_t status = CRC_INVALID;
         if(crc32 == metadataHdr.fixedHdr.crc32) // if crc matched then update its status in the copied image
         {
@@ -756,6 +838,108 @@ static bool Bim_revertFactoryImage(void)
 }
 
 /*******************************************************************************
+ * @fn     Bim_sckCrc32   (SCK-2400)
+ *
+ * Image CRC used by the SCK BIM paths (OAD copy check, golden pre-check and
+ * golden copy check). Standard CRC-32 (IEEE 802.3, reflected 0xEDB88320,
+ * init 0xFFFFFFFF, final xor 0xFFFFFFFF) over image bytes [12, len): skips
+ * imgID[8] and the crc32 field itself. The GS computes the same value after
+ * each build and writes it into the image header (crc32 at offset 8).
+ * Our build never ran TI's oad_image_tool, so the header used to carry
+ * crc32 = 0xFFFFFFFF with crcStat pre-set to CRC_VALID.
+ *
+ * extFl: true = read from external flash (must be open), false = internal
+ * flash (memory mapped).
+ */
+static uint32_t Bim_sckCrc32(uint32_t addr, uint32_t len, bool extFl)
+{
+    uint8_t  buf[64];
+    uint32_t crc = 0xFFFFFFFFu;
+    uint32_t off = 12u;
+
+    while (off < len)
+    {
+        uint32_t n = ((len - off) < sizeof(buf)) ? (len - off) : sizeof(buf);
+        if (extFl)
+        {
+            extFlashRead(addr + off, n, buf);
+        }
+        else
+        {
+            memcpy(buf, (const uint8_t *)(addr + off), n);
+        }
+        for (uint32_t i = 0; i < n; i++)
+        {
+            crc ^= buf[i];
+            for (uint8_t b = 0; b < 8u; b++)
+            {
+                crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));
+            }
+        }
+        off += n;
+    }
+    return ~crc;
+}
+
+/*******************************************************************************
+ * @fn     Bim_trialRecordBoot / Bim_trialCheck   (SCK-2400)
+ *
+ * Trial boot of a new OAD candidate (see SCK_GOLDEN_MAGIC block above).
+ * Flash writes only clear bits, so no erase is needed.
+ */
+static void Bim_trialRecordBoot(uint8_t metaPage, uint32_t counter)
+{
+    uint8_t low = (uint8_t)(counter & 0xFFu);
+    if (low == 0u)
+    {
+        return;
+    }
+    low &= (uint8_t)(low - 1u);            /* clear the lowest set bit */
+    extFlashWrite(EXT_FLASH_ADDRESS(metaPage, EFL_META_COUNTER_OFFSET), 1, &low);
+}
+
+static void Bim_trialCheck(void)
+{
+    ExtImageInfo_t m;
+
+    if (!extFlashOpen())
+    {
+        return;
+    }
+    extFlashRead(EXT_FLASH_ADDRESS(SCK_CAND_META_PAGE, 0), EFL_METADATA_LEN, (uint8_t *)&m);
+
+    /* Only a copied, not-rejected, not-yet-confirmed candidate is on trial */
+    if (!metadataIDCheck(&m.fixedHdr) ||
+        (m.fixedHdr.imgCpStat != COPY_DONE) ||
+        (m.fixedHdr.crcStat == CRC_INVALID) ||
+        ((m.counter & SCK_TRIAL_CONFIRM_MASK) == 0u))
+    {
+        extFlashClose();
+        return;
+    }
+
+    uint8_t low  = (uint8_t)(m.counter & 0xFFu);
+    uint8_t used = 0;
+    for (uint8_t b = 0; b < 8u; b++)
+    {
+        if ((low & (1u << b)) == 0u) { used++; }
+    }
+
+    if (used >= SCK_TRIAL_MAX_BOOTS)
+    {
+        /* Never confirmed: reject the candidate for good, then revert. */
+        uint8_t st = CRC_INVALID;
+        extFlashWrite(EXT_FLASH_ADDRESS(SCK_CAND_META_PAGE, CRC_STAT_OFFSET), 1, &st);
+        extFlashClose();
+        Bim_revertFactoryImage();   /* no return if golden is valid */
+        return;                     /* no golden: boot what is in internal flash */
+    }
+
+    Bim_trialRecordBoot(SCK_CAND_META_PAGE, m.counter);
+    extFlashClose();
+}
+
+/*******************************************************************************
  * @fn     Bim_checkImages
  *
  * @brief  Check for stored images on external flash needed to be copied and
@@ -768,6 +952,10 @@ static bool Bim_revertFactoryImage(void)
 static void Bim_checkImages(void)
 {
 #ifndef DEBUG_BIM
+
+    /* SCK: count boots of an unconfirmed candidate; after
+     * SCK_TRIAL_MAX_BOOTS reject it and revert to golden. */
+    Bim_trialCheck();
 
     /* Find executable on offchip flash; Validate it before copying to internal flash
      * and then execute it */
@@ -1212,6 +1400,8 @@ int main(void)
   __set_CONTROL(0);
 #endif
 
+    sckBimDiagBlink();   /* 3 fast blinks = BIM reached main() */
+
 /* CAUTION: Never enable the macro "FLASH_DEVICE_ERASE" if the device
  * needs to boot to new image after doing a successful OAD.
  * Enabling this macro would mean that the newly downloaded OAD Image
@@ -1268,9 +1458,12 @@ int main(void)
     Bim_checkImages();
 
     /* If we get here, that means there is an issue: no valid image found.
-     * Set the device to the lowest power state. Does not return.
+     * SCK: do not park in low-power mode forever (a brick in orbit).
+     * Wait ~10 s and reset to try again; the ROM bootloader (DIO6 low at
+     * reset, enabled in ccfg_sck.c) remains available for a full reflash.
      */
-    setLowPowerMode();
+    CPUdelay(SCK_BIM_RETRY_DELAY_LOOPS);
+    SysCtrlSystemReset();
 
     return(0);
 }

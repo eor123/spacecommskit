@@ -4,7 +4,9 @@
  *
  * Flash layout:
  *   0x00000000 - 0x00003FFF  BIM (pages 0-1, 16KB)
- *   0x00004000 - 0x00055FFF  Application (pages 2-42, 328KB)
+ *   0x00004000 - 0x00051FFF  Application (pages 2-40, 312KB)
+ *   0x00052000 - 0x00053FFF  NVS (pages 41-42, 8KB)
+ *   0x00054000 - 0x00055FFF  Reserved
  *   0x00056000 - 0x00057FFF  CCFG (page 43, 8KB)
  *
  * The OAD image header (_imgHdr) is placed at the very start of the
@@ -32,15 +34,25 @@ HEAPSIZE = 0x4000;  /* Size of heap buffer used by HeapMem */
 --diag_remark=10068
 
 #define FLASH_BASE              0x00004000  /* Application starts after BIM */
-#define FLASH_SIZE              0x00052000  /* 328KB for app (pages 2-42) */
+#define FLASH_SIZE              0x0004E000  /* 312KB for app (pages 2-40) */
 #define RAM_BASE                0x20000000
 #define RAM_SIZE                0x14000
 #define GPRAM_BASE              0x11000000
 #define GPRAM_SIZE              0x2000
 
+/* NVS region -- immediately after app flash, at 0x52000 (pages 41-42).
+ * Placed AFTER the app flash region end (0x4000+0x4E000=0x52000) so BIM
+ * never erases it -- BIM copies exactly FLASH_SIZE bytes starting at
+ * FLASH_BASE, ending at 0x52000. NVS starts where BIM stops.
+ * srfprog -e all erases these pages on every flash cycle (expected).
+ * SCK-DEV: NV_STORAGE -- do not place code or initialized data here. */
+#define NVS_BASE                0x00052000
+#define NVS_SIZE                0x00002000  /* 8KB = two 4KB sectors (0x52000-0x53FFF) */
+
 MEMORY
 {
     FLASH (RX) : origin = FLASH_BASE, length = FLASH_SIZE
+    NVS   (RW) : origin = NVS_BASE,   length = NVS_SIZE
     SRAM (RWX) : origin = RAM_BASE, length = RAM_SIZE
     GPRAM (RWX): origin = GPRAM_BASE, length = GPRAM_SIZE
     LOG_DATA (R) : origin = 0x90000000, length = 0x40000
@@ -67,6 +79,12 @@ SECTIONS
     .init_array     :   > FLASH
     .emb_text       :   >> FLASH
     .ccfg           :   > FLASH (HIGH)
+
+    /* NVS data region -- pinned to fixed address in NVS memory region.
+     * The TI NVSInternal driver places its flash data in .nvs sections.
+     * Pinning here ensures srfprog -e all always erases this region and
+     * the linker cannot accidentally place code here. */
+    .nvs            :   > NVS, type = NOLOAD
 
     .ramVecs        :   > SRAM, type = NOLOAD, ALIGN(256)
     .data           :   > SRAM

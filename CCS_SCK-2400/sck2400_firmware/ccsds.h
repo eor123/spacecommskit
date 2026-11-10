@@ -85,7 +85,161 @@ typedef struct __attribute__((packed))
 #define SCK_APID_BOARD_BROADCAST    0x000   /* All boards respond             */
 
 /* Board address set by ground station build tool — do not edit manually. */
-#define SCK_APID_THIS_BOARD         0x010   /* GS Board  (APID 0x010) */
+#define SCK_APID_THIS_BOARD         0x011   /* Remote 1  (APID 0x011) */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -222,6 +376,17 @@ typedef struct __attribute__((packed))
 #define CMD_ACK                     0x02    /* Acknowledge / ping         */
 #define CMD_REBOOT                  0x03    /* Soft reset                 */
 #define CMD_BEACON_CTRL             0x04    /* Enable/disable RF beacon   */
+#define CMD_CLEAR_SAFE_MODE         0x05    /* Clear safe mode + reset counter
+                                             * Sent by ground station after
+                                             * reviewing telemetry and confirming
+                                             * the board is healthy. Resets
+                                             * reset_counter to 0 and clears
+                                             * safe_mode flag in NV flash.
+                                             * Board resumes full operation
+                                             * immediately (no reboot required).
+                                             * Extension point: add a payload
+                                             * byte to set an arbitrary counter
+                                             * value for diagnostic purposes. */
 
 
 /* Pico payload commands -- forwarded to payload processor over UART.
@@ -242,6 +407,16 @@ typedef struct __attribute__((packed))
 #define CMD_OAD_END                 0x12    /* Finalize: [4B crc32] verify+reboot*/
 #define CMD_OAD_ABORT               0x13    /* Abort OAD session, clear slot     */
 #define CMD_OAD_STATUS              0x14    /* Query: returns bytes received      */
+#define CMD_OAD_SET_GOLDEN          0x15    /* Copy running app to golden slot   */
+
+/* Crypto replay-protection control (11/2026, crypto.c)
+ * 0x16 clears this board's replay table -- LOCAL UART ONLY (refused over RF)
+ *      reply: [0x16][status 0x00][stats, as 0x17]
+ * 0x17 reads crypto counters (allowed over RF)
+ *      reply: [0x17][accepted 4B][rejMac 4B][rejReplay 4B][rejFormat 4B]
+ *             [replayClears 4B][silenceResets 4B][bootCount 4B]  (big-endian) */
+#define CMD_CRYPTO_RESET_REPLAY     0x16
+#define CMD_CRYPTO_STATUS           0x17
 
 /* ── Payload board commands (0x20-0x29) ─────────────────────────────────
  * Bridge: CCSDS opcode 0x2N → CC1352P → ESP sub-opcode 0x0N → Pico

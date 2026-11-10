@@ -1,0 +1,38 @@
+# ---- SpaceCommsKit repo ignore rules (added 11/2026) ----
+
+# SECRETS -- never commit. security.h holds the AES-128 keys the Ground
+# Station patches in at build time; any .hex/.out built after patching
+# contains those keys too.
+**/security.h
+**/sck2400_merged.hex
+CCS_SCK-2400/sck2400_firmware/*.hex
+
+# CCS / TI build output
+**/Debug/
+**/Release/
+*.o
+*.obj
+*.out
+*.map
+*.d
+**/.clangd/
+
+# Visual Studio / .NET build output
+**/.vs/
+**/bin/
+**/obj/
+*.user
+
+# Editor / OS clutter
+*.bak
+*.orig
+*.pre_*
+Thumbs.db
+desktop.ini
+
+# Build output folders (added 11/10)
+CCS_SCK-2400/sck2400_firmware/V3/
+CCS_SCK-2400/sck2400_bim/V3/*
+!CCS_SCK-2400/sck2400_bim/V3/sck2400_bim.hex
+**/*.sckbuild
+*.diff
